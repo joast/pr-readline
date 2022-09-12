@@ -5,7 +5,7 @@ require 'timeout'
 require "support/filesystem_completion_helper"
 
 class TestCompletion < Minitest::Test
-  include RbReadline
+  include PrReadline
   include FilesystemCompletionHelper
 
   def filename_quoting_function(filename, mtype, quote_char)
@@ -67,7 +67,7 @@ class TestCompletion < Minitest::Test
   end
 
   def test_make_quoted_replacement_calls_filename_quoting_function
-    assert_equal "dir/with\\ space", make_quoted_replacement("dir/with space", RbReadline::SINGLE_MATCH, 0.chr)
+    assert_equal "dir/with\\ space", make_quoted_replacement('dir/with space', PrReadline::SINGLE_MATCH, 0.chr)
   end
 
   def test_rl_filname_completion_function_calls_dequoting_function

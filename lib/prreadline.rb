@@ -1,20 +1,16 @@
 # encoding: US-ASCII
 #
-# rbreadline.rb -- a general facility for reading lines of input
-#   with emacs style editing and completion.
+# prreadline.rb -- a general facility for reading lines of input with emacs
+# style editing and completion.
 
 #
-#  Inspired by GNU Readline, translation to Ruby
-#  Copyright (C) 2009 by Park Heesob phasis@gmail.com
+# Inspired by GNU Readline, translation to Ruby
+# Copyright (C) 2009 by Park Heesob phasis@gmail.com
 #
 
-require "rbreadline/version"
+require_relative "pr-readline/version"
 
-class Integer
-  def ord; self; end
-end
-
-module RbReadline
+module PrReadline
   require 'etc'
 
   RL_LIBRARY_VERSION = "5.2"
@@ -3482,7 +3478,7 @@ module RbReadline
         if (!@rl_byte_oriented)
           _rl_wrapped_multicolumn = 0
           if (@_rl_screenwidth < lpos + wc_width)
-            for i in lpos ... @_rl_screenwidth
+            (lpos ... @_rl_screenwidth).each do
               # The space will be removed in update_line()
               line[out,1] = ' '
               out += 1
@@ -3501,7 +3497,7 @@ module RbReadline
           end
           line[out,wc_bytes] = @rl_line_buffer[_in,wc_bytes]
           out += wc_bytes
-          for i in 0 ... wc_width
+          (0 ... wc_width).each do
             lpos+=1
             if (lpos >= @_rl_screenwidth)
               @inv_lbreaks[newlines+=1] = out
@@ -7581,12 +7577,12 @@ module RbReadline
 
   def history_arg_extract(first, last, string)
     if first != "$" || last != "$"
-      fail "RbReadline.history_arg_extract called with currently unsupported args."
+      fail "PrReadline.history_arg_extract called with currently unsupported args."
     end
 
     # Find the last index of an unescaped quote character.
     last_unescaped_quote_char = -1
-    RbReadline::HISTORY_QUOTE_CHARACTERS.each_char do |quote_char|
+    PrReadline::HISTORY_QUOTE_CHARACTERS.each_char do |quote_char|
       quote_char = Regexp.escape(quote_char)
       if index = string =~ /(?:\\.|[^#{quote_char}\\])#{quote_char} *$/
         last_unescaped_quote_char = index if index > last_unescaped_quote_char
@@ -7595,7 +7591,7 @@ module RbReadline
     last_unescaped_quote_char += 1 # Because of the regex used above.
 
     # Find the last index of an unescaped word delimiter.
-    delimiters = RbReadline::HISTORY_WORD_DELIMITERS.chars.to_a.map { |d| Regexp.escape(d) }
+    delimiters = PrReadline::HISTORY_WORD_DELIMITERS.chars.to_a.map { |d| Regexp.escape(d) }
     unless last_unescaped_delimiter = string =~ /(?:\\.|[^#{delimiters.join}])+? *$/
       last_unescaped_delimiter = 0
     end
@@ -8502,7 +8498,9 @@ module RbReadline
           # is at the end of the line and the previous character is a
           # slash.
           if (@rl_point>0 && @rl_line_buffer[@rl_point,1] == 0.chr && @rl_line_buffer[@rl_point - 1,1] == '/' )
-
+            # this comment is here to suppress the following rubocop error:
+            #   An error occurred while Lint/EmptyConditionalBody cop was
+            #   inspecting ...
           elsif (@rl_line_buffer[@rl_point,1] != '/')
             rl_insert_text('/')
           end

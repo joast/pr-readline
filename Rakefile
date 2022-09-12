@@ -1,10 +1,19 @@
-require 'rubygems/package_task'
+# warn_indent: true
+# frozen_string_literal: true
+
 require 'rake/testtask'
 require 'bundler/gem_tasks'
+require 'git/lint/rake/setup'
+require 'English'
 
-spec = Gem::Specification.load "rb-readline.gemspec"
-
-Gem::PackageTask.new(spec) do |pkg|
+file 'Gemfile.lock' => ['pr-readline.gemspec'] do
+  puts 'Running "bundle check"...' if verbose
+  system('bundle', 'check')
+  abort '"bundle check" failed' unless $CHILD_STATUS&.exited? && $CHILD_STATUS&.success?
+  # Make sure Gemfile.lock's timestamps are updated to keep this rule from
+  # again until pr-readline.gemspec is updated.
+  now = Time.now
+  File.utime(now, now, 'Gemfile.lock')
 end
 
 Rake::TestTask.new do |t|
@@ -14,12 +23,11 @@ Rake::TestTask.new do |t|
   t.verbose = true
 end
 
-desc "Install the gem locally"
-task :install => :gem do
-  Dir.chdir(File.dirname(__FILE__)) do
-    sh %{gem install --local pkg/#{spec.name}-#{spec.version}.gem}
-  end
-end
+require 'rubocop/rake_task'
 
-desc "The default is to test everything."
-task :default => :test
+RuboCop::RakeTask.new
+
+task rubocop: 'Gemfile.lock' # rubocop:disable Rake/Desc
+
+desc 'The default is to run rubocop and tests if rubocop succeeds.'
+task default: %i[rubocop test]
