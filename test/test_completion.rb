@@ -1,32 +1,40 @@
-require "minitest/autorun"
-require "readline"
+# warn_indent: true
+# frozen_string_literal: true
 
+# rubocop:disable Lint/MissingCopEnableDirective
+# rubocop:disable Metrics/MethodLength
+# rubocop:disable Layout/LineLength
+
+require 'minitest/autorun'
+require 'readline'
 require 'timeout'
-require "support/filesystem_completion_helper"
+require_relative 'support/filesystem_completion_helper'
 
 class TestCompletion < Minitest::Test
   include PrReadline
   include FilesystemCompletionHelper
 
-  def filename_quoting_function(filename, mtype, quote_char)
+  def filename_quoting_function(filename, _mtype, _quote_char)
     quoted_filename = filename.dup
-    @rl_filename_quote_characters.split("").each do |c|
+
+    @rl_filename_quote_characters.chars.each do |c|
       quoted_filename.gsub!(c, "\\#{c}")
     end
+
     quoted_filename
   end
 
-  def filename_dequoting_function(filename, quote_char = "\\")
+  def filename_dequoting_function(filename, quote_char = '\\')
     filename.delete quote_char
   end
 
-  def setup
+  def setup # rubocop:disable Metrics/AbcSize
     @rl_completion_word_break_hook, @rl_char_is_quoted_p = nil
     @rl_basic_quote_characters, @rl_special_prefixes = nil
     @rl_completer_word_break_characters = Readline.basic_word_break_characters
-    @rl_completer_quote_characters = "\\"
-    @rl_completion_quote_character = "\\"
-    @rl_filename_quote_characters = " "
+    @rl_completer_quote_characters = '\\'
+    @rl_completion_quote_character = '\\'
+    @rl_filename_quote_characters = ' '
     @rl_byte_oriented = true
     @rl_filename_quoting_desired = true
     @rl_filename_completion_desired = true
@@ -47,8 +55,8 @@ class TestCompletion < Minitest::Test
     teardown_filesystem_after_completion
   end
 
-  def set_line_buffer(text)
-    @rl_line_buffer = text
+  def set_line_buffer(text) # rubocop:disable Naming/AccessorMethodName
+    @rl_line_buffer = text.dup
     @rl_point = @rl_line_buffer.size
     @rl_line_buffer << 0.chr
   end
@@ -56,18 +64,20 @@ class TestCompletion < Minitest::Test
   def test__find_completion_word_doesnt_hang_on_completer_quote_character
     set_line_buffer "#{@dir_with_spaces.path}filename\\ w"
 
-    Timeout::timeout(3) do
-      assert_equal([ "\000", true, "\000" ], _rl_find_completion_word)
+    Timeout.timeout(3) do
+      assert_equal(["\000", true, "\000"], _rl_find_completion_word)
     end
   end
 
   def test__find_completion_word_without_quote_characters
     set_line_buffer "#{@comp_test_dir.path}a"
-    assert_equal([ "\000", false, "\000" ], _rl_find_completion_word)
+    assert_equal(["\000", false, "\000"], _rl_find_completion_word)
   end
 
   def test_make_quoted_replacement_calls_filename_quoting_function
-    assert_equal "dir/with\\ space", make_quoted_replacement('dir/with space', PrReadline::SINGLE_MATCH, 0.chr)
+    assert_equal('dir/with\\ space',
+                 make_quoted_replacement('dir/with space',
+                                         PrReadline::SINGLE_MATCH, 0.chr))
   end
 
   def test_rl_filname_completion_function_calls_dequoting_function
@@ -77,7 +87,10 @@ class TestCompletion < Minitest::Test
     # rl_filename_completion_function is called with an increasing state in
     # order to iterate through directory entries.
 
-    entries = [ "#{@dir_with_spaces.path}sub dir with spaces", "#{@dir_with_spaces.path}filename with spaces" ]
+    entries = [
+      "#{@dir_with_spaces.path}sub dir with spaces",
+      "#{@dir_with_spaces.path}filename with spaces"
+    ]
 
     assert entries.include?(rl_filename_completion_function(dir, 0))
     assert entries.include?(rl_filename_completion_function(dir, 1))
@@ -87,11 +100,12 @@ class TestCompletion < Minitest::Test
   end
 
   def test_completing_path_starting_dot_slash
-    assert_equal "./#{COMP_TEST_DIR.chop}", rl_filename_completion_function("./#{COMP_TEST_DIR.chop}", 0)
+    assert_equal("./#{COMP_TEST_DIR.chop}",
+                 rl_filename_completion_function("./#{COMP_TEST_DIR.chop}", 0))
   end
 
   def test_completing_non_existant_directory
-    assert_nil rl_filename_completion_function("/this/dir/does/not/exist", 0)
+    assert_nil rl_filename_completion_function(+'/this/dir/does/not/exist', 0)
   end
 
   def test_completing_a_file_as_a_directory

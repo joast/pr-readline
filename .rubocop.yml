@@ -8,6 +8,10 @@ AllCops:
   NewCops: enable
   SuggestExtensions: false
 
+Naming/FileName:
+  Exclude:
+    - lib/pr-readline.rb
+
 Style/StringLiterals:
   Enabled: true
   EnforcedStyle: single_quotes
@@ -17,7 +21,7 @@ Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
 
 Layout/LineLength:
-  Max: 78
+  Max: 80
 # Max: 120
 
 Gemspec/RequireMFA:
@@ -28,3 +32,6 @@ Layout/LineContinuationLeadingSpace:
 
 Style/BlockComments:
   Enabled: false
+
+Style/TernaryParentheses:
+  EnforcedStyle: require_parentheses_when_complex

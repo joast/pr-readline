@@ -43,15 +43,9 @@ Gem::Specification.new do |spec|
   # spec.add_development_dependency 'rake', '>= 10.0'
 
   # components, files and paths
-  spec.files = Dir[
-    '{bench,examples,lib,test}/**/*.rb',
-    'CHANGES',
-    'LICENSE',
-    'README.md',
-    'Rakefile',
-    'pr-readline.gemspec',
-    'setup.rb'
-  ]
+  spec.files = %w[CHANGES CODE_OF_CONDUCT.md LICENSE README.md Rakefile
+                  pr-readline.gemspec] +
+                  Dir['*/**/*.rb']
 
   spec.require_path = 'lib'
 

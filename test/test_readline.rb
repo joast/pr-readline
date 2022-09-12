@@ -1,9 +1,16 @@
+# warn_indent: true
+# frozen_string_literal: true
+
+# rubocop:disable Lint/MissingCopEnableDirective
+# rubocop:disable Metrics/ClassLength
+# rubocop:disable Metrics/MethodLength
+
 require 'minitest/autorun'
 require 'readline'
 
-class TestReadline < Minitest::Test
+class TestReadline < Minitest::Test # :nodoc:
   def setup
-    @proc = proc{ |s| ['alpha', 'beta'].grep( /^#{Regexp.escape(s)}/) }
+    @proc = proc { |s| %w[alpha beta].grep(/^#{Regexp.escape(s)}/) }
   end
 
   def test_version
@@ -110,18 +117,18 @@ class TestReadline < Minitest::Test
   end
 
   def test_completion_append_character_set
-    assert_equal " ", Readline.completion_append_character
+    assert_equal ' ', Readline.completion_append_character
   end
 
   def test_completion_append_character
     orig_char = Readline.completion_append_character
     begin
       [
-        [ "x", "x" ],
-        [ "xyx", "x" ],
-        [ " ", " " ],
-        [ "\t", "\t" ],
-        [ "", nil ],
+        %w[x x],
+        %w[xyx x],
+        [' ', ' '],
+        %W[\t \t],
+        ['', nil]
       ].each do |data, expected|
         Readline.completion_append_character = data
         if expected.nil?
@@ -174,21 +181,19 @@ class TestReadline < Minitest::Test
   end
 
   def test_some_character_methods
-    expecteds = [ " ", " .,|\t", "" ]
-    [
-      :basic_word_break_characters,
-      :completer_word_break_characters,
-      :basic_quote_characters,
-      :completer_quote_characters,
-      :filename_quote_characters,
+    expecteds = [' ', " .,|\t", '']
+    %i[
+      basic_word_break_characters
+      completer_word_break_characters
+      basic_quote_characters
+      completer_quote_characters
+      filename_quote_characters
     ].each do |method|
-      begin
-        saved = Readline.send(method)
-        expecteds.each do |e|
-          Readline.send("#{method}=".to_sym, e)
-          assert_equal(e, Readline.send(method),
-            "failed case #{e.inspect} for method #{method}")
-        end
+      saved = Readline.send(method)
+      expecteds.each do |e|
+        Readline.send("#{method}=".to_sym, e)
+        assert_equal(e, Readline.send(method),
+                     "failed case #{e.inspect} for method #{method}")
       ensure
         Readline.send("#{method}=".to_sym, saved) if saved
       end
@@ -196,42 +201,41 @@ class TestReadline < Minitest::Test
   end
 
   def test_attempted_comp_func_returns_nil_when_no_completion_proc_set
-    assert_nil Readline.readline_attempted_completion_function("12", 0, 1)
+    assert_nil Readline.readline_attempted_completion_function('12', 0, 1)
   end
 
   def test_attempted_comp_func_case_folding
-    Readline.completion_proc = Proc.new do |word|
-       %w( 123456 123abc abc123 ).grep(/^#{word}/i)
+    Readline.completion_proc = proc do |word|
+      %w[123456 123abc abc123].grep(/^#{word}/i)
     end
 
     Readline.completion_case_fold = true
 
-    assert_equal [ "123", "123456", "123abc", nil ], Readline.readline_attempted_completion_function("123", 0, 3)
+    assert_equal(['123', '123456', '123abc', nil],
+                 Readline.readline_attempted_completion_function('123', 0, 3))
 
-    assert_equal [ "123abc", nil, nil ], Readline.readline_attempted_completion_function("123A", 0, 3)
-
+    assert_equal(['123abc', nil, nil],
+                 Readline.readline_attempted_completion_function('123A', 0, 3))
   ensure
     Readline.completion_case_fold = false
-    Readline.module_eval do
-      @completion_proc = nil
-    end
+    Readline.module_eval { @completion_proc = nil }
   end
 
   def test_attempted_comp_func_removes_replacement_from_possible_matches
-    Readline.completion_proc = Proc.new do |word|
-       %w( 123456 123abc abc123 ).grep(/^#{word}/)
+    Readline.completion_proc = proc do |word|
+      %w[123456 123abc abc123].grep(/^#{word}/)
     end
 
-    assert_equal [ "123", "123456", "123abc", nil ], Readline.readline_attempted_completion_function("12", 0, 1)
+    assert_equal(['123', '123456', '123abc', nil],
+                 Readline.readline_attempted_completion_function('12', 0, 1))
 
-    assert_equal [ "123", "123456", "123abc", nil ], Readline.readline_attempted_completion_function("123", 0, 2)
+    assert_equal(['123', '123456', '123abc', nil],
+                 Readline.readline_attempted_completion_function('123', 0, 2))
 
-    assert_equal [ "123456", nil, nil ], Readline.readline_attempted_completion_function("1234", 0, 3)
-
+    assert_equal(['123456', nil, nil],
+                 Readline.readline_attempted_completion_function('1234', 0, 3))
   ensure
-    Readline.module_eval do
-      @completion_proc = nil
-    end
+    Readline.module_eval { @completion_proc = nil }
   end
 
   def teardown

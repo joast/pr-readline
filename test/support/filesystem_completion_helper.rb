@@ -1,12 +1,19 @@
-require "fileutils"
+# warn_indent: true
+# frozen_string_literal: true
+
+require 'fileutils'
+
+# rubocop:disable Lint/MissingCopEnableDirective
+# rubocop:disable Metrics/AbcSize
+# rubocop:disable Metrics/MethodLength
 
 module FilesystemCompletionHelper
   SEP = File::SEPARATOR
-  COMP_TEST_DIR = "comp_test#{SEP}"
-  SUB_DIR = "#{COMP_TEST_DIR}a_sub_dir#{SEP}"
-  SUB_SUB_DIR = "#{SUB_DIR}another_sub_dir#{SEP}"
-  DIR_WITH_SPACES = "#{COMP_TEST_DIR}dir with spaces#{SEP}"
-  SUB_DIR_WITH_SPACES = "#{DIR_WITH_SPACES}sub dir with spaces#{SEP}"
+  COMP_TEST_DIR = "comp_test#{SEP}".freeze
+  SUB_DIR = "#{COMP_TEST_DIR}a_sub_dir#{SEP}".freeze
+  SUB_SUB_DIR = "#{SUB_DIR}another_sub_dir#{SEP}".freeze
+  DIR_WITH_SPACES = "#{COMP_TEST_DIR}dir with spaces#{SEP}".freeze
+  SUB_DIR_WITH_SPACES = "#{DIR_WITH_SPACES}sub dir with spaces#{SEP}".freeze
 
   # This creates:
   #
@@ -23,8 +30,8 @@ module FilesystemCompletionHelper
   #       sub dir with spaces/
   #         another filename with spaces
   def setup_filesystem_for_completion
-    FileUtils.mkdir_p("#{SUB_SUB_DIR}")
-    FileUtils.mkdir_p("#{SUB_DIR_WITH_SPACES}")
+    FileUtils.mkdir_p(SUB_SUB_DIR)
+    FileUtils.mkdir_p(SUB_DIR_WITH_SPACES)
     @comp_test_dir = Dir.new COMP_TEST_DIR
     @sub_dir = Dir.new SUB_DIR
     @sub_sub_dir = Dir.new SUB_SUB_DIR

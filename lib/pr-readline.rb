@@ -3,10 +3,7 @@
 
 unless defined? PrReadline
   if defined? Readline
-    if $DEBUG
-      $stderr.puts 'Removing old Readline module - redefined by pr-readline.'
-    end
-
+    warn 'Removing old Readline module - redefined by pr-readline.' if $DEBUG
     Object.send(:remove_const, :Readline)
   end
 

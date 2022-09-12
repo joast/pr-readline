@@ -1,12 +1,22 @@
 # encoding: US-ASCII
-#
+# warn_indent: true
+# frozen_string_literal: true
+
 # readline.rb -- GNU Readline module
 # Copyright (C) 1997-2001  Shugo Maeda
 #
 # Ruby translation by Park Heesob phasis@gmail.com
 # Renamed from RbReadline to PrReadline by Rick Ohnemus rick_ohnemus@acm.org
 
-module Readline
+# rubocop:disable Lint/MissingCopEnableDirective
+# rubocop:disable Metrics/AbcSize
+# rubocop:disable Metrics/BlockNesting
+# rubocop:disable Metrics/CyclomaticComplexity
+# rubocop:disable Metrics/MethodLength
+# rubocop:disable Metrics/ModuleLength
+# rubocop:disable Metrics/PerceivedComplexity
+
+module Readline # :nodoc:
   require_relative 'prreadline'
   include PrReadline
 
@@ -33,28 +43,25 @@ module Readline
   #
   #    loop{ Readline.readline('> ') }
   #
-  def readline(prompt = "", add_history = nil)
-    if $stdin.closed?
-      raise IOError, "stdin closed"
-    end
+  def readline(prompt = '', add_history = nil)
+    raise IOError, 'stdin closed' if $stdin.closed?
 
     PrReadline.rl_instream = $stdin
     PrReadline.rl_outstream = $stdout
 
     begin
       buff = PrReadline.readline(prompt)
-    rescue Exception => e
+    rescue Exception => e # rubocop:disable Lint/RescueException
+      # TODO: rescue StandardError?
       buff = nil
-      PrReadline.rl_cleanup_after_signal()
-      PrReadline.rl_deprep_terminal()
+      PrReadline.rl_cleanup_after_signal
+      PrReadline.rl_deprep_terminal
       raise e
     end
 
-    if add_history && buff
-      PrReadline.add_history(buff)
-    end
+    PrReadline.add_history(buff) if add_history && buff
 
-    return buff ? buff.dup : nil
+    buff ? buff.dup : nil
   end
 
   # Sets the input stream (an IO object) for readline interaction. The
@@ -90,14 +97,15 @@ module Readline
   #
   def self.completion_proc=(proc)
     unless proc.respond_to? :call
-      raise ArgumentError,"argument must respond to `call'"
+      raise ArgumentError, "argument must respond to `call'"
     end
+
     @completion_proc = proc
   end
 
   # Returns the current auto-completion procedure.
   #
-  def self.completion_proc()
+  def self.completion_proc
     @completion_proc
   end
 
@@ -111,7 +119,7 @@ module Readline
   # Returns whether or not the completion proc is case sensitive. The
   # default is false, i.e. completion procs are case sensitive.
   #
-  def self.completion_case_fold()
+  def self.completion_case_fold
     @completion_case_fold
   end
 
@@ -126,7 +134,7 @@ module Readline
   # If this method sets PrReadline.rl_attempted_completion_over to true,
   # then the default completion function will not be called when this
   # function returns nil.
-  def self.readline_attempted_completion_function(text,start,_end)
+  def self.readline_attempted_completion_function(text, _start, _end)
     proc = @completion_proc
     return nil if proc.nil?
 
@@ -134,49 +142,50 @@ module Readline
 
     case_fold = @completion_case_fold
     ary = proc.call(text)
-    if ary.class != Array
-      ary = Array(ary)
-    else
+
+    if ary.instance_of?(Array)
       ary.compact!
+    else
+      ary = Array(ary)
     end
 
     matches = ary.length
-    return nil if (matches == 0)
-    result = Array.new(matches+2)
-    for i in 0 ... matches
-      result[i+1] = ary[i].dup
-    end
-    result[matches+1] = nil
+    return nil if matches.zero?
 
-    if(matches==1)
+    result = Array.new(matches + 2)
+    (0...matches).each { |i| result[i + 1] = ary[i].dup }
+    result[matches + 1] = nil
+
+    if matches == 1
       result[0] = result[1].dup
       result[1] = nil
     else
       i = 1
-      low = 100000
+      low = 100_000
 
-      while (i < matches)
-        if (case_fold)
-          si = 0
-          while ((c1 = result[i][si,1].downcase) &&
-                 (c2 = result[i + 1][si,1].downcase))
-            break if (c1 != c2)
+      while i < matches
+        si = 0
+
+        if case_fold
+          while (c1 = result[i][si, 1].downcase) &&
+                (c2 = result[i + 1][si, 1].downcase)
+            break if c1 != c2
+
             si += 1
           end
         else
-          si = 0
-          while ((c1 = result[i][si,1]) &&
-                 (c2 = result[i + 1][si,1]))
-            break if (c1 != c2)
+          while (c1 = result[i][si, 1]) && (c2 = result[i + 1][si, 1])
+            break if c1 != c2
+
             si += 1
           end
         end
-        if (low > si)
-          low = si
-        end
-        i+=1
+
+        low = si if low > si
+        i += 1
       end
-      result[0] = result[1][0,low]
+
+      result[0] = result[1][0, low]
     end
 
     result
@@ -184,8 +193,8 @@ module Readline
 
   # Sets vi editing mode.
   #
-  def self.vi_editing_mode()
-    PrReadline.rl_vi_editing_mode(1,0)
+  def self.vi_editing_mode
+    PrReadline.rl_vi_editing_mode(1, 0)
     nil
   end
 
@@ -197,8 +206,8 @@ module Readline
 
   # Sets emacs editing mode
   #
-  def self.emacs_editing_mode()
-    PrReadline.rl_emacs_editing_mode(1,0)
+  def self.emacs_editing_mode
+    PrReadline.rl_emacs_editing_mode(1, 0)
     nil
   end
 
@@ -214,20 +223,15 @@ module Readline
   # If +char+ is nil or empty, then a null character is used.
   #
   def self.completion_append_character=(char)
-    if char.nil?
-      PrReadline.rl_completion_append_character = ?\0
-    elsif char.length==0
-      PrReadline.rl_completion_append_character = ?\0
-    else
-      PrReadline.rl_completion_append_character = char[0].chr
-    end
+    PrReadline.rl_completion_append_character =
+      (char.nil? || char.empty?) ? "\0".chr : char[0].chr
   end
 
   # Returns the character that is automatically appended after the
   # Readline.completion_proc method is called.
   #
-  def self.completion_append_character()
-    if PrReadline.rl_completion_append_character == ?\0
+  def self.completion_append_character
+    if PrReadline.rl_completion_append_character == "\0".chr
       nil
     else
       PrReadline.rl_completion_append_character
@@ -244,7 +248,7 @@ module Readline
   # Returns the character string that signal a break between words for the
   # completion proc. The default is " \t\n\"\\'`@$><=|&{(".
   #
-  def self.basic_word_break_characters()
+  def self.basic_word_break_characters
     if PrReadline.rl_basic_word_break_characters.nil?
       nil
     else
@@ -262,7 +266,7 @@ module Readline
   # Returns the character string that signal the start or end of a word for
   # the completion proc.
   #
-  def self.completer_word_break_characters()
+  def self.completer_word_break_characters
     if PrReadline.rl_completer_word_break_characters.nil?
       nil
     else
@@ -279,7 +283,7 @@ module Readline
   # Returns the list of quote characters that can cause a word break.
   # The default is "'\"" (single and double quote characters).
   #
-  def self.basic_quote_characters()
+  def self.basic_quote_characters
     if PrReadline.rl_basic_quote_characters.nil?
       nil
     else
@@ -297,7 +301,7 @@ module Readline
   # Returns the list of characters that can be used to quote a substring
   # of the line, i.e. a group of characters inside quotes.
   #
-  def self.completer_quote_characters()
+  def self.completer_quote_characters
     if PrReadline.rl_completer_quote_characters.nil?
       nil
     else
@@ -315,7 +319,7 @@ module Readline
   # Returns the character string used to indicate quotes for the filename
   # completion of user input.
   #
-  def self.filename_quote_characters()
+  def self.filename_quote_characters
     if PrReadline.rl_filename_quote_characters.nil?
       nil
     else
@@ -325,18 +329,8 @@ module Readline
 
   # Returns the current offset in the current input line.
   #
-  def self.point()
+  def self.point
     PrReadline.rl_point
-  end
-
-  # Temporarily disable warnings and call a block
-  #
-  def self.silence_warnings(&block)
-    warn_level = $VERBOSE
-    $VERBOSE = nil
-    result = block.call
-    $VERBOSE = warn_level
-    result
   end
 
   # The History class encapsulates a history of all commands entered by
@@ -350,7 +344,7 @@ module Readline
     # Why?
     #
     def self.to_s
-      "HISTORY"
+      'HISTORY'
     end
 
     # Returns the command that was entered at the specified +index+
@@ -359,13 +353,11 @@ module Readline
     # Raises an IndexError if the entry is nil.
     #
     def self.[](index)
-      if index < 0
-        index += PrReadline.history_length
-      end
-      entry = PrReadline.history_get(PrReadline.history_base+index)
-      if entry.nil?
-        raise IndexError,"invalid index"
-      end
+      index += PrReadline.history_length if index.negative?
+      entry = PrReadline.history_get(PrReadline.history_base + index)
+
+      raise IndexError, 'invalid index' if entry.nil?
+
       entry.line.dup
     end
 
@@ -374,14 +366,12 @@ module Readline
     # You can only replace an existing entry. Attempting to create a new
     # entry will result in an IndexError.
     #
-    def self.[]=(index,str)
-      if index<0
-        index += PrReadline.history_length
-      end
-      entry = PrReadline.replace_history_entry(index,str,nil)
-      if entry.nil?
-        raise IndexError,"invalid index"
-      end
+    def self.[]=(index, str)
+      index += PrReadline.history_length if index.negative?
+      entry = PrReadline.replace_history_entry(index, str, nil)
+
+      raise IndexError, 'invalid index' if entry.nil?
+
       str
     end
 
@@ -406,79 +396,70 @@ module Readline
     #
     def self.rb_remove_history(index)
       entry = PrReadline.remove_history(index)
-      if (entry)
-        val = entry.line.dup
-        entry = nil
-        return val
-      end
-      nil
+      entry ? entry.line.dup : nil
     end
 
     # Removes and returns the last element from the history buffer.
     #
-    def self.pop()
-      if PrReadline.history_length>0
-        rb_remove_history(PrReadline.history_length-1)
-      else
-        nil
-      end
+    def self.pop
+      return nil unless PrReadline.history_length.positive?
+
+      rb_remove_history(PrReadline.history_length - 1)
     end
 
     # Removes and returns the first element from the history buffer.
     #
-    def self.shift()
-      if PrReadline.history_length>0
-        rb_remove_history(0)
-      else
-        nil
-      end
+    def self.shift
+      PrReadline.history_length.positive? ? rb_remove_history(0) : nil
     end
 
     # Iterates over each entry in the history buffer.
     #
-    def self.each()
-      for i in 0 ... PrReadline.history_length
+    def self.each
+      (0...PrReadline.history_length).each do |i|
         entry = PrReadline.history_get(PrReadline.history_base + i)
         break if entry.nil?
+
         yield entry.line.dup
       end
+
       self
     end
 
     # Returns the length of the history buffer.
     #
-    def self.length()
+    def self.length
       PrReadline.history_length
     end
 
     # Synonym for Readline.length.
     #
-    def self.size()
+    def self.size
       PrReadline.history_length
     end
 
     # Returns a bolean value indicating whether or not the history buffer
     # is empty.
     #
-    def self.empty?()
-      PrReadline.history_length == 0
+    def self.empty?
+      PrReadline.history_length.zero?
     end
 
     # Deletes an entry from the histoyr buffer at the specified +index+.
     #
     def self.delete_at(index)
-      if index < 0
-        i += PrReadline.history_length
+      # TODO: verfiy this should be "index += ..." instead of "i += ..."
+      index += PrReadline.history_length if index.negative?
+
+      if index.negative? || index > PrReadline.history_length - 1
+        raise IndexError, 'invalid index'
       end
-      if index < 0 || index > PrReadline.history_length - 1
-        raise IndexError, "invalid index"
-      end
+
       rb_remove_history(index)
     end
-
   end
 
-  silence_warnings { HISTORY = History }
+  HISTORY = History
 
   # The Fcomp class provided to encapsulate typical filename completion
   # procedure. You will not typically use this directly, but will instead
@@ -486,27 +467,31 @@ module Readline
   #
   class Fcomp
     def self.call(str)
-      matches = PrReadline.rl_completion_matches(str, :rl_filename_completion_function)
-      if (matches)
+      matches =
+        PrReadline.rl_completion_matches(str, :rl_filename_completion_function)
+
+      if matches
         result = []
         i = 0
-        while(matches[i])
+
+        while matches[i]
           result << matches[i].dup
           matches[i] = nil
           i += 1
         end
-        matches = nil
-        if (result.length >= 2)
-          result.shift
-        end
+
+        # matches = nil
+
+        result.shift if result.length >= 2
       else
         result = nil
       end
-      return result
+
+      result
     end
   end
 
-  silence_warnings { FILENAME_COMPLETION_PROC = Fcomp }
+  FILENAME_COMPLETION_PROC = Fcomp
 
   # The Ucomp class provided to encapsulate typical filename completion
   # procedure. You will not typically use this directly, but will instead
@@ -517,36 +502,38 @@ module Readline
   #
   class Ucomp
     def self.call(str)
-      matches = PrReadline.rl_completion_matches(str, :rl_username_completion_function)
-      if (matches)
+      matches =
+        PrReadline.rl_completion_matches(str, :rl_username_completion_function)
+
+      if matches
         result = []
         i = 0
-        while(matches[i])
+
+        while matches[i]
           result << matches[i].dup
           matches[i] = nil
           i += 1
         end
-        matches = nil
-        if (result.length >= 2)
-          result.shift
-        end
+
+        result.shift if result.length >= 2
       else
         result = nil
       end
-      return result
+
+      result
     end
   end
 
-  silence_warnings { USERNAME_COMPLETION_PROC = Ucomp }
+  USERNAME_COMPLETION_PROC = Ucomp
 
-  PrReadline.rl_readline_name = "Ruby"
+  PrReadline.rl_readline_name = 'Ruby'
 
-  PrReadline.using_history()
+  PrReadline.using_history
 
-  silence_warnings { VERSION = PrReadline.rl_library_version }
+  VERSION = PrReadline.rl_library_version
 
   module_function :readline
 
-  PrReadline.rl_attempted_completion_function = :readline_attempted_completion_function
-
+  PrReadline.rl_attempted_completion_function =
+    :readline_attempted_completion_function
 end

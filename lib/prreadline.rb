@@ -1,5 +1,7 @@
 # encoding: US-ASCII
-#
+# warn_indent: true
+# frozen_string_literal: true
+
 # prreadline.rb -- a general facility for reading lines of input with emacs
 # style editing and completion.
 
@@ -8,12 +10,12 @@
 # Copyright (C) 2009 by Park Heesob phasis@gmail.com
 #
 
-require_relative "pr-readline/version"
+require_relative 'pr-readline/version'
 
-module PrReadline
+module PrReadline # rubocop:disable Metrics/ModuleLength
   require 'etc'
 
-  RL_LIBRARY_VERSION = "5.2"
+  RL_LIBRARY_VERSION = '5.2'
   RL_READLINE_VERSION  = 0x0502
 
   EOF = "\xFF"
@@ -33,26 +35,29 @@ module PrReadline
   MB_FIND_ANY = 0
   MB_LEN_MAX = 4
 
-  DEFAULT_INPUTRC = "~/.inputrc"
-  SYS_INPUTRC = "/etc/inputrc"
+  DEFAULT_INPUTRC = '~/.inputrc'
+  SYS_INPUTRC = '/etc/inputrc'
 
-  UpCase = 1
+  # rubocop:disable Naming/ConstantName
+  # keep these as-is for backward compatibility
+  UpCase   = 1
   DownCase = 2
-  CapCase = 3
+  CapCase  = 3
+  # rubocop:enable Naming/ConstantName
 
   # Possible history errors passed to hist_error.
   EVENT_NOT_FOUND = 0
-  BAD_WORD_SPEC  = 1
-  SUBST_FAILED   = 2
-  BAD_MODIFIER   = 3
-  NO_PREV_SUBST  = 4
+  BAD_WORD_SPEC   = 1
+  SUBST_FAILED    = 2
+  BAD_MODIFIER    = 3
+  NO_PREV_SUBST   = 4
 
   # Possible definitions for history starting point specification.
-  ANCHORED_SEARCH = 1
+  ANCHORED_SEARCH     = 1
   NON_ANCHORED_SEARCH = 0
 
   # Possible definitions for what style of writing the history file we want.
-  HISTORY_APPEND = 0
+  HISTORY_APPEND    = 0
   HISTORY_OVERWRITE = 1
 
   # Input error; can be returned by (*rl_getc_function) if readline is reading
@@ -60,62 +65,65 @@ module PrReadline
   READERR = 0xFE.chr
 
   # Definitions available for use by readline clients.
-  RL_PROMPT_START_IGNORE    = 1.chr
-  RL_PROMPT_END_IGNORE    = 2.chr
+  RL_PROMPT_START_IGNORE = 1.chr
+  RL_PROMPT_END_IGNORE   = 2.chr
 
   # Possible values for do_replace argument to rl_filename_quoting_function,
   #   called by rl_complete_internal.
-  NO_MATCH      =  0
-  SINGLE_MATCH  =  1
-  MULT_MATCH    =  2
+  NO_MATCH     = 0
+  SINGLE_MATCH = 1
+  MULT_MATCH   = 2
 
   # Callback data for reading numeric arguments
-  NUM_SAWMINUS   = 0x01
+  NUM_SAWMINUS  = 0x01
   NUM_SAWDIGITS = 0x02
-  NUM_READONE = 0x04
+  NUM_READONE   = 0x04
 
   # A context for reading key sequences longer than a single character when
   #   using the callback interface.
   KSEQ_DISPATCHED = 0x01
-  KSEQ_SUBSEQ = 0x02
-  KSEQ_RECURSIVE = 0x04
+  KSEQ_SUBSEQ     = 0x02
+  KSEQ_RECURSIVE  = 0x04
 
   # Possible state values for rl_readline_state
-  RL_STATE_NONE        = 0x000000        # no state before first call
+  RL_STATE_NONE         = 0x000000 # no state before first call
+  RL_STATE_INITIALIZING = 0x000001 # initializing
+  RL_STATE_INITIALIZED  = 0x000002 # initialization done
+  RL_STATE_TERMPREPPED  = 0x000004 # terminal is prepped
+  RL_STATE_READCMD      = 0x000008 # reading a command key
+  RL_STATE_METANEXT     = 0x000010 # reading input after ESC
+  RL_STATE_DISPATCHING  = 0x000020 # dispatching to a command
+  RL_STATE_MOREINPUT    = 0x000040 # reading more input in a command function
+  RL_STATE_ISEARCH      = 0x000080 # doing incremental search
+  RL_STATE_NSEARCH      = 0x000100 # doing non-inc search
+  RL_STATE_SEARCH       = 0x000200 # doing a history search
+  RL_STATE_NUMERICARG   = 0x000400 # reading numeric argument
+  RL_STATE_MACROINPUT   = 0x000800 # getting input from a macro
+  RL_STATE_MACRODEF     = 0x001000 # defining keyboard macro
+  RL_STATE_OVERWRITE    = 0x002000 # overwrite mode
+  RL_STATE_COMPLETING   = 0x004000 # doing completion
+  RL_STATE_SIGHANDLER   = 0x008000 # in readline sighandler
+  RL_STATE_UNDOING      = 0x010000 # doing an undo
+  RL_STATE_INPUTPENDING = 0x020000 # rl_execute_next called
+  RL_STATE_TTYCSAVED    = 0x040000 # tty special chars saved
+  RL_STATE_CALLBACK     = 0x080000 # using the callback interface
+  RL_STATE_VIMOTION     = 0x100000 # reading vi motion arg
+  RL_STATE_MULTIKEY     = 0x200000 # reading multiple-key command
+  RL_STATE_VICMDONCE    = 0x400000 # entered vi command mode at least once
 
-  RL_STATE_INITIALIZING =    0x000001    # initializing
-  RL_STATE_INITIALIZED  =    0x000002    # initialization done
-  RL_STATE_TERMPREPPED  =    0x000004    # terminal is prepped
-  RL_STATE_READCMD =    0x000008    # reading a command key
-  RL_STATE_METANEXT =    0x000010    # reading input after ESC
-  RL_STATE_DISPATCHING =    0x000020    # dispatching to a command
-  RL_STATE_MOREINPUT    = 0x000040    # reading more input in a command function
-  RL_STATE_ISEARCH    = 0x000080    # doing incremental search
-  RL_STATE_NSEARCH    = 0x000100    # doing non-inc search
-  RL_STATE_SEARCH        = 0x000200    # doing a history search
-  RL_STATE_NUMERICARG    = 0x000400    # reading numeric argument
-  RL_STATE_MACROINPUT    = 0x000800    # getting input from a macro
-  RL_STATE_MACRODEF    = 0x001000    # defining keyboard macro
-  RL_STATE_OVERWRITE    = 0x002000    # overwrite mode
-  RL_STATE_COMPLETING    = 0x004000    # doing completion
-  RL_STATE_SIGHANDLER    = 0x008000    # in readline sighandler
-  RL_STATE_UNDOING    = 0x010000    # doing an undo
-  RL_STATE_INPUTPENDING =    0x020000    # rl_execute_next called
-  RL_STATE_TTYCSAVED     = 0x040000    # tty special chars saved
-  RL_STATE_CALLBACK     = 0x080000    # using the callback interface
-  RL_STATE_VIMOTION     = 0x100000    # reading vi motion arg
-  RL_STATE_MULTIKEY     = 0x200000    # reading multiple-key command
-  RL_STATE_VICMDONCE     = 0x400000    # entered vi command mode at least once
+  RL_STATE_DONE         = 0x800000 # done accepted line
 
-  RL_STATE_DONE        = 0x800000    # done accepted line
-
-  NO_BELL = 0
+  NO_BELL      = 0
   AUDIBLE_BELL = 1
   VISIBLE_BELL = 2
+
   # The actions that undo knows how to undo.  Notice that UNDO_DELETE means
   #   to insert some text, and UNDO_INSERT means to delete some text.   I.e.,
   #   the code tells undo what to undo, not how to undo it.
-  UNDO_DELETE, UNDO_INSERT, UNDO_BEGIN, UNDO_END  = 0,1,2,3
+  UNDO_DELETE = 0
+  UNDO_INSERT = 1
+  UNDO_BEGIN  = 2
+  UNDO_END    = 3
 
   # Definitions used when searching the line for characters.
   # NOTE: it is necessary that opposite directions are inverses
@@ -127,40 +135,42 @@ module PrReadline
   # Possible values for the found_quote flags word used by the completion
   #   functions.  It says what kind of (shell-like) quoting we found anywhere
   #   in the line.
-  RL_QF_SINGLE_QUOTE   = 0x01
-  RL_QF_DOUBLE_QUOTE   = 0x02
-  RL_QF_BACKSLASH      = 0x04
-  RL_QF_OTHER_QUOTE = 0x08
+  RL_QF_SINGLE_QUOTE = 0x01
+  RL_QF_DOUBLE_QUOTE = 0x02
+  RL_QF_BACKSLASH    = 0x04
+  RL_QF_OTHER_QUOTE  = 0x08
 
   KEYMAP_SIZE = 257
-  ANYOTHERKEY = KEYMAP_SIZE-1
+  ANYOTHERKEY = KEYMAP_SIZE - 1
 
   @hConsoleHandle = nil
   @MessageBeep = nil
 
   RL_IM_INSERT    = 1
-  RL_IM_OVERWRITE    = 0
-  RL_IM_DEFAULT    = RL_IM_INSERT
+  RL_IM_OVERWRITE = 0
+  RL_IM_DEFAULT   = RL_IM_INSERT
+
   @no_mode = -1
   @vi_mode = 0
   @emacs_mode = 1
+
   ISFUNC = 0
   ISKMAP = 1
   ISMACR = 2
 
-  HISTORY_WORD_DELIMITERS    = " \t\n;&()|<>"
-  HISTORY_QUOTE_CHARACTERS   = "\"'`"
+  HISTORY_WORD_DELIMITERS  = " \t\n;&()|<>"
+  HISTORY_QUOTE_CHARACTERS = "\"'`"
 
-  RL_SEARCH_ISEARCH = 0x01      # incremental search
-  RL_SEARCH_NSEARCH = 0x02      # non-incremental search
-  RL_SEARCH_CSEARCH = 0x04      # intra-line char search
+  RL_SEARCH_ISEARCH = 0x01 # incremental search
+  RL_SEARCH_NSEARCH = 0x02 # non-incremental search
+  RL_SEARCH_CSEARCH = 0x04 # intra-line char search
 
   # search flags
-  SF_REVERSE     = 0x01
-  SF_FOUND    = 0x02
-  SF_FAILED      = 0x04
+  SF_REVERSE = 0x01
+  SF_FOUND   = 0x02
+  SF_FAILED  = 0x04
 
-  @slashify_in_quotes = "\\`\"$"
+  @slashify_in_quotes = '\\`"$' # ' emacs ruby mode escaped quote "hack"
 
   @sigint_proc = nil
   @sigint_blocked = false
@@ -170,7 +180,7 @@ module PrReadline
 
   @_rl_history_saved_point = -1
 
-  @rl_max_kills =  DEFAULT_MAX_KILLS
+  @rl_max_kills = DEFAULT_MAX_KILLS
   @rl_kill_ring = nil
   @rl_kill_index = 0
   @rl_kill_ring_length = 0
@@ -194,8 +204,11 @@ module PrReadline
   @noninc_history_pos = 0
   @prev_line_found = nil
 
-  @_rl_tty_chars = Struct.new(:t_eol,:t_eol2,:t_erase,:t_werase,:t_kill,:t_reprint,:t_intr,:t_eof,
-                              :t_quit,:t_susp,:t_dsusp,:t_start,:t_stop,:t_lnext,:t_flush,:t_status).new
+  @_rl_tty_chars = Struct.new(:t_eol, :t_eol2, :t_erase, :t_werase, :t_kill,
+                              :t_reprint, :t_intr, :t_eof, :t_quit, :t_susp,
+                              :t_dsusp, :t_start, :t_stop, :t_lnext, :t_flush,
+                              :t_status).new
+
   @_rl_last_tty_chars = nil
 
   @_keyboard_input_timeout = 0.001
@@ -203,11 +216,11 @@ module PrReadline
   # Variables exported by this file.
   # The character that represents the start of a history expansion
   #   request.  This is usually `!'.
-  @history_expansion_char = "!"
+  @history_expansion_char = '!'
 
   # The character that invokes word substitution if found at the start of
   #   a line.  This is usually `^'.
-  @history_subst_char = "^"
+  @history_subst_char = '^'
 
   # During tokenization, if this character is seen as the first character
   #   of a word, then it, and all subsequent characters upto a newline are
@@ -302,7 +315,7 @@ module PrReadline
 
   @saved_local_prompt = nil
   @saved_local_prefix = nil
-  @saved_last_invisible =  0
+  @saved_last_invisible = 0
   @saved_visible_length = 0
   @saved_prefix_length = 0
   @saved_local_length = 0
@@ -326,17 +339,17 @@ module PrReadline
   @the_history = nil
   @history_base = 1
 
-  # Non-zero means that we have enforced a limit on the amount of
-  #   history that we save.
+  # Non-zero means that we have enforced a limit on the amount of history that
+  # we save.
   @history_stifled = false
 
-  # If HISTORY_STIFLED is non-zero, then this is the maximum number of
-  #   entries to remember.
+  # If HISTORY_STIFLED is non-zero, then this is the maximum number of entries
+  # to remember.
   @history_max_entries = 0
-  @max_input_history = 0  # backwards compatibility
+  @max_input_history = 0 # backwards compatibility
 
-  # The current location of the interactive history pointer.  Just makes
-  #   life easier for outside callers.
+  # The current location of the interactive history pointer.  Just makes life
+  # easier for outside callers.
   @history_offset = 0
 
   # The number of strings currently stored in the history list.
@@ -348,18 +361,18 @@ module PrReadline
   @_rl_vi_doing_insert = 0
 
   # Command keys which do movement for xxx_to commands.
-  @vi_motion = " hl^$0ftFT;,%wbeWBE|"
+  @vi_motion = ' hl^$0ftFT;,%wbeWBE|'
 
-  # Keymap used for vi replace characters.  Created dynamically since
-  #   rarely used.
+  # Keymap used for vi replace characters.  Created dynamically since rarely
+  # used.
   @vi_replace_map = nil
 
   # The number of characters inserted in the last replace operation.
   @vi_replace_count = 0
 
-  # If non-zero, we have text inserted after a c[motion] command that put
-  #   us implicitly into insert mode.  Some people want this text to be
-  #   attached to the command so that it is `redoable' with `.'.
+  # If non-zero, we have text inserted after a c[motion] command that put us
+  # implicitly into insert mode.  Some people want this text to be attached to
+  # the command so that it is `redoable' with `.'.
   @vi_continued_command = false
   @vi_insert_buffer = nil
   @vi_insert_buffer_size = 0
@@ -375,236 +388,236 @@ module PrReadline
   @vi_redoing = 0
 
   # Text modification commands.  These are the `redoable' commands.
-  @vi_textmod = "_*\\AaIiCcDdPpYyRrSsXx~"
+  @vi_textmod = '_*\\AaIiCcDdPpYyRrSsXx~'
 
   # Arrays for the saved marks.
-  @vi_mark_chars = Array.new(26,-1)
+  @vi_mark_chars = Array.new(26, -1)
 
   @emacs_standard_keymap = {
-      "\C-@" => :rl_set_mark  ,
-      "\C-a" => :rl_beg_of_line  ,
-      "\C-b" => :rl_backward_char  ,
-      "\C-d" => :rl_delete  ,
-      "\C-e" => :rl_end_of_line  ,
-      "\C-f" => :rl_forward_char  ,
-      "\C-g" => :rl_abort  ,
-      "\C-h" => :rl_rubout  ,
-      "\C-i" => :rl_complete  ,
-      "\C-j" => :rl_newline  ,
-      "\C-k" => :rl_kill_line  ,
-      "\C-l" => :rl_clear_screen  ,
-      "\C-m" => :rl_newline  ,
-      "\C-n" => :rl_get_next_history  ,
-      "\C-p" => :rl_get_previous_history  ,
-      "\C-q" => :rl_quoted_insert  ,
-      "\C-r" => :rl_reverse_search_history  ,
-      "\C-s" => :rl_forward_search_history  ,
-      "\C-t" => :rl_transpose_chars  ,
-      "\C-u" => :rl_unix_line_discard  ,
-      "\C-v" => :rl_quoted_insert  ,
-      "\C-w" => :rl_unix_word_rubout  ,
-      "\C-y" => :rl_yank  ,
-      "\C-]" => :rl_char_search  ,
-      "\C-_" => :rl_undo_command  ,
-      "\x7F" => :rl_rubout ,
-      "\e\C-g" => :rl_abort  ,
-      "\e\C-h" => :rl_backward_kill_word  ,
-      "\e\C-i" => :rl_tab_insert  ,
-      "\e\C-j" => :rl_vi_editing_mode  ,
-      "\e\C-m" => :rl_vi_editing_mode  ,
-      "\e\C-r" => :rl_revert_line  ,
-      "\e\C-y" => :rl_yank_nth_arg  ,
-      "\e\C-[" => :rl_complete  ,
-      "\e\C-]" => :rl_backward_char_search  ,
-      "\e " => :rl_set_mark  ,
-      "\e#" => :rl_insert_comment  ,
-      "\e&" => :rl_tilde_expand  ,
-      "\e*" => :rl_insert_completions  ,
-      "\e-" => :rl_digit_argument  ,
-      "\e." => :rl_yank_last_arg ,
-      "\e0" => :rl_digit_argument  ,
-      "\e1" => :rl_digit_argument  ,
-      "\e2" => :rl_digit_argument  ,
-      "\e3" => :rl_digit_argument  ,
-      "\e4" => :rl_digit_argument  ,
-      "\e5" => :rl_digit_argument  ,
-      "\e6" => :rl_digit_argument  ,
-      "\e7" => :rl_digit_argument  ,
-      "\e8" => :rl_digit_argument  ,
-      "\e9" => :rl_digit_argument  ,
-      "\e<" => :rl_beginning_of_history  ,
-      "\e=" => :rl_possible_completions  ,
-      "\e>" => :rl_end_of_history  ,
-      "\e?" => :rl_possible_completions  ,
-      "\eB" => :rl_backward_word  ,
-      "\eC" => :rl_capitalize_word  ,
-      "\eD" => :rl_kill_word  ,
-      "\eF" => :rl_forward_word  ,
-      "\eL" => :rl_downcase_word  ,
-      "\eN" => :rl_noninc_forward_search  ,
-      "\eP" => :rl_noninc_reverse_search  ,
-      "\eR" => :rl_revert_line  ,
-      "\eT" => :rl_transpose_words  ,
-      "\eU" => :rl_upcase_word  ,
-      "\eY" => :rl_yank_pop  ,
-      "\e\\" => :rl_delete_horizontal_space  ,
-      "\e_" => :rl_yank_last_arg  ,
-      "\eb" => :rl_backward_word  ,
-      "\ec" => :rl_capitalize_word  ,
-      "\ed" => :rl_kill_word  ,
-      "\ef" => :rl_forward_word  ,
-      "\el" => :rl_downcase_word  ,
-      "\en" => :rl_noninc_forward_search  ,
-      "\ep" => :rl_noninc_reverse_search  ,
-      "\er" => :rl_revert_line  ,
-      "\et" => :rl_transpose_words  ,
-      "\eu" => :rl_upcase_word  ,
-      "\ey" => :rl_yank_pop  ,
-      "\e~" => :rl_tilde_expand  ,
-      "\377" => :rl_backward_kill_word  ,
-      "\e\x7F" => :rl_backward_kill_word,
+    "\C-@" => :rl_set_mark,
+    "\C-a" => :rl_beg_of_line,
+    "\C-b" => :rl_backward_char,
+    "\C-d" => :rl_delete,
+    "\C-e" => :rl_end_of_line,
+    "\C-f" => :rl_forward_char,
+    "\C-g" => :rl_abort,
+    "\C-h" => :rl_rubout,
+    "\C-i" => :rl_complete,
+    "\C-j" => :rl_newline,
+    "\C-k" => :rl_kill_line,
+    "\C-l" => :rl_clear_screen,
+    "\C-m" => :rl_newline,
+    "\C-n" => :rl_get_next_history,
+    "\C-p" => :rl_get_previous_history,
+    "\C-q" => :rl_quoted_insert,
+    "\C-r" => :rl_reverse_search_history,
+    "\C-s" => :rl_forward_search_history,
+    "\C-t" => :rl_transpose_chars,
+    "\C-u" => :rl_unix_line_discard,
+    "\C-v" => :rl_quoted_insert,
+    "\C-w" => :rl_unix_word_rubout,
+    "\C-y" => :rl_yank,
+    "\C-]" => :rl_char_search,
+    "\C-_" => :rl_undo_command,
+    "\x7F" => :rl_rubout,
+    "\e\C-g" => :rl_abort,
+    "\e\C-h" => :rl_backward_kill_word,
+    "\e\C-i" => :rl_tab_insert,
+    "\e\C-j" => :rl_vi_editing_mode,
+    "\e\C-m" => :rl_vi_editing_mode,
+    "\e\C-r" => :rl_revert_line,
+    "\e\C-y" => :rl_yank_nth_arg,
+    "\e\C-[" => :rl_complete,
+    "\e\C-]" => :rl_backward_char_search,
+    "\e " => :rl_set_mark,
+    "\e#" => :rl_insert_comment,
+    "\e&" => :rl_tilde_expand,
+    "\e*" => :rl_insert_completions,
+    "\e-" => :rl_digit_argument,
+    "\e." => :rl_yank_last_arg,
+    "\e0" => :rl_digit_argument,
+    "\e1" => :rl_digit_argument,
+    "\e2" => :rl_digit_argument,
+    "\e3" => :rl_digit_argument,
+    "\e4" => :rl_digit_argument,
+    "\e5" => :rl_digit_argument,
+    "\e6" => :rl_digit_argument,
+    "\e7" => :rl_digit_argument,
+    "\e8" => :rl_digit_argument,
+    "\e9" => :rl_digit_argument,
+    "\e<" => :rl_beginning_of_history,
+    "\e=" => :rl_possible_completions,
+    "\e>" => :rl_end_of_history,
+    "\e?" => :rl_possible_completions,
+    "\eB" => :rl_backward_word,
+    "\eC" => :rl_capitalize_word,
+    "\eD" => :rl_kill_word,
+    "\eF" => :rl_forward_word,
+    "\eL" => :rl_downcase_word,
+    "\eN" => :rl_noninc_forward_search,
+    "\eP" => :rl_noninc_reverse_search,
+    "\eR" => :rl_revert_line,
+    "\eT" => :rl_transpose_words,
+    "\eU" => :rl_upcase_word,
+    "\eY" => :rl_yank_pop,
+    "\e\\" => :rl_delete_horizontal_space,
+    "\e_" => :rl_yank_last_arg,
+    "\eb" => :rl_backward_word,
+    "\ec" => :rl_capitalize_word,
+    "\ed" => :rl_kill_word,
+    "\ef" => :rl_forward_word,
+    "\el" => :rl_downcase_word,
+    "\en" => :rl_noninc_forward_search,
+    "\ep" => :rl_noninc_reverse_search,
+    "\er" => :rl_revert_line,
+    "\et" => :rl_transpose_words,
+    "\eu" => :rl_upcase_word,
+    "\ey" => :rl_yank_pop,
+    "\e~" => :rl_tilde_expand,
+    "\377" => :rl_backward_kill_word,
+    "\e\x7F" => :rl_backward_kill_word,
 
-      "\C-x\C-g" => :rl_abort  ,
-      "\C-x\C-r" => :rl_re_read_init_file  ,
-      "\C-x\C-u" => :rl_undo_command  ,
-      "\C-x\C-x" => :rl_exchange_point_and_mark  ,
-      "\C-x(" => :rl_start_kbd_macro  ,
-      "\C-x)" => :rl_end_kbd_macro   ,
-      "\C-xE" => :rl_call_last_kbd_macro  ,
-      "\C-xe" => :rl_call_last_kbd_macro  ,
-      "\C-x\x7F" => :rl_backward_kill_line
+    "\C-x\C-g" => :rl_abort,
+    "\C-x\C-r" => :rl_re_read_init_file,
+    "\C-x\C-u" => :rl_undo_command,
+    "\C-x\C-x" => :rl_exchange_point_and_mark,
+    "\C-x(" => :rl_start_kbd_macro,
+    "\C-x)" => :rl_end_kbd_macro,
+    "\C-xE" => :rl_call_last_kbd_macro,
+    "\C-xe" => :rl_call_last_kbd_macro,
+    "\C-x\x7F" => :rl_backward_kill_line
   }
 
   @vi_movement_keymap = {
-      "\C-d" => :rl_vi_eof_maybe ,
-      "\C-e" => :rl_emacs_editing_mode ,
-      "\C-g" => :rl_abort ,
-      "\C-h" => :rl_backward_char ,
-      "\C-j" => :rl_newline ,
-      "\C-k" => :rl_kill_line ,
-      "\C-l" => :rl_clear_screen ,
-      "\C-m" => :rl_newline ,
-      "\C-n" => :rl_get_next_history ,
-      "\C-p" => :rl_get_previous_history ,
-      "\C-q" => :rl_quoted_insert ,
-      "\C-r" => :rl_reverse_search_history ,
-      "\C-s" => :rl_forward_search_history ,
-      "\C-t" => :rl_transpose_chars ,
-      "\C-u" => :rl_unix_line_discard ,
-      "\C-v" => :rl_quoted_insert ,
-      "\C-w" => :rl_unix_word_rubout ,
-      "\C-y" => :rl_yank ,
-      "\C-_" => :rl_vi_undo ,
-      " " => :rl_forward_char ,
-      "#" => :rl_insert_comment ,
-      "$" => :rl_end_of_line ,
-      "%" => :rl_vi_match ,
-      "&" => :rl_vi_tilde_expand ,
-      "*" => :rl_vi_complete ,
-      "+" => :rl_get_next_history ,
-      "," => :rl_vi_char_search ,
-      "-" => :rl_get_previous_history ,
-      "." => :rl_vi_redo ,
-      "/" => :rl_vi_search ,
-      "0" => :rl_beg_of_line ,
-      "1" => :rl_vi_arg_digit ,
-      "2" => :rl_vi_arg_digit ,
-      "3" => :rl_vi_arg_digit ,
-      "4" => :rl_vi_arg_digit ,
-      "5" => :rl_vi_arg_digit ,
-      "6" => :rl_vi_arg_digit ,
-      "7" => :rl_vi_arg_digit ,
-      "8" => :rl_vi_arg_digit ,
-      "9" => :rl_vi_arg_digit ,
-      "" => :rl_vi_char_search ,
-      "=" => :rl_vi_complete ,
-      "?" => :rl_vi_search ,
-      "A" => :rl_vi_append_eol ,
-      "B" => :rl_vi_prev_word ,
-      "C" => :rl_vi_change_to ,
-      "D" => :rl_vi_delete_to ,
-      "E" => :rl_vi_end_word ,
-      "F" => :rl_vi_char_search ,
-      "G" => :rl_vi_fetch_history ,
-      "I" => :rl_vi_insert_beg ,
-      "N" => :rl_vi_search_again ,
-      "P" => :rl_vi_put ,
-      "R" => :rl_vi_replace ,
-      "S" => :rl_vi_subst ,
-      "T" => :rl_vi_char_search ,
-      "U" => :rl_revert_line ,
-      "W" => :rl_vi_next_word ,
-      "X" => :rl_vi_rubout ,
-      "Y" => :rl_vi_yank_to ,
-      "\\" => :rl_vi_complete ,
-      "^" => :rl_vi_first_print ,
-      "_" => :rl_vi_yank_arg ,
-      "`" => :rl_vi_goto_mark ,
-      "a" => :rl_vi_append_mode ,
-      "b" => :rl_vi_prev_word ,
-      "c" => :rl_vi_change_to ,
-      "d" => :rl_vi_delete_to ,
-      "e" => :rl_vi_end_word ,
-      "f" => :rl_vi_char_search ,
-      "h" => :rl_backward_char ,
-      "i" => :rl_vi_insertion_mode ,
-      "j" => :rl_get_next_history ,
-      "k" => :rl_get_previous_history ,
-      "l" => :rl_forward_char ,
-      "m" => :rl_vi_set_mark ,
-      "n" => :rl_vi_search_again ,
-      "p" => :rl_vi_put ,
-      "r" => :rl_vi_change_char ,
-      "s" => :rl_vi_subst ,
-      "t" => :rl_vi_char_search ,
-      "u" => :rl_vi_undo ,
-      "w" => :rl_vi_next_word ,
-      "x" => :rl_vi_delete ,
-      "y" => :rl_vi_yank_to ,
-      "|" => :rl_vi_column ,
-      "~" => :rl_vi_change_case
+    "\C-d" => :rl_vi_eof_maybe,
+    "\C-e" => :rl_emacs_editing_mode,
+    "\C-g" => :rl_abort,
+    "\C-h" => :rl_backward_char,
+    "\C-j" => :rl_newline,
+    "\C-k" => :rl_kill_line,
+    "\C-l" => :rl_clear_screen,
+    "\C-m" => :rl_newline,
+    "\C-n" => :rl_get_next_history,
+    "\C-p" => :rl_get_previous_history,
+    "\C-q" => :rl_quoted_insert,
+    "\C-r" => :rl_reverse_search_history,
+    "\C-s" => :rl_forward_search_history,
+    "\C-t" => :rl_transpose_chars,
+    "\C-u" => :rl_unix_line_discard,
+    "\C-v" => :rl_quoted_insert,
+    "\C-w" => :rl_unix_word_rubout,
+    "\C-y" => :rl_yank,
+    "\C-_" => :rl_vi_undo,
+    ' ' => :rl_forward_char,
+    '#' => :rl_insert_comment,
+    '$' => :rl_end_of_line,
+    '%' => :rl_vi_match,
+    '&' => :rl_vi_tilde_expand,
+    '*' => :rl_vi_complete,
+    '+' => :rl_get_next_history,
+    ',' => :rl_vi_char_search,
+    '-' => :rl_get_previous_history,
+    '.' => :rl_vi_redo,
+    '/' => :rl_vi_search,
+    '0' => :rl_beg_of_line,
+    '1' => :rl_vi_arg_digit,
+    '2' => :rl_vi_arg_digit,
+    '3' => :rl_vi_arg_digit,
+    '4' => :rl_vi_arg_digit,
+    '5' => :rl_vi_arg_digit,
+    '6' => :rl_vi_arg_digit,
+    '7' => :rl_vi_arg_digit,
+    '8' => :rl_vi_arg_digit,
+    '9' => :rl_vi_arg_digit,
+    '' => :rl_vi_char_search,
+    '=' => :rl_vi_complete,
+    '?' => :rl_vi_search,
+    'A' => :rl_vi_append_eol,
+    'B' => :rl_vi_prev_word,
+    'C' => :rl_vi_change_to,
+    'D' => :rl_vi_delete_to,
+    'E' => :rl_vi_end_word,
+    'F' => :rl_vi_char_search,
+    'G' => :rl_vi_fetch_history,
+    'I' => :rl_vi_insert_beg,
+    'N' => :rl_vi_search_again,
+    'P' => :rl_vi_put,
+    'R' => :rl_vi_replace,
+    'S' => :rl_vi_subst,
+    'T' => :rl_vi_char_search,
+    'U' => :rl_revert_line,
+    'W' => :rl_vi_next_word,
+    'X' => :rl_vi_rubout,
+    'Y' => :rl_vi_yank_to,
+    "\\" => :rl_vi_complete,
+    '^' => :rl_vi_first_print,
+    '_' => :rl_vi_yank_arg,
+    '`' => :rl_vi_goto_mark,
+    'a' => :rl_vi_append_mode,
+    'b' => :rl_vi_prev_word,
+    'c' => :rl_vi_change_to,
+    'd' => :rl_vi_delete_to,
+    'e' => :rl_vi_end_word,
+    'f' => :rl_vi_char_search,
+    'h' => :rl_backward_char,
+    'i' => :rl_vi_insertion_mode,
+    'j' => :rl_get_next_history,
+    'k' => :rl_get_previous_history,
+    'l' => :rl_forward_char,
+    'm' => :rl_vi_set_mark,
+    'n' => :rl_vi_search_again,
+    'p' => :rl_vi_put,
+    'r' => :rl_vi_change_char,
+    's' => :rl_vi_subst,
+    't' => :rl_vi_char_search,
+    'u' => :rl_vi_undo,
+    'w' => :rl_vi_next_word,
+    'x' => :rl_vi_delete,
+    'y' => :rl_vi_yank_to,
+    '|' => :rl_vi_column,
+    '~' => :rl_vi_change_case
   }
 
   @vi_insertion_keymap = {
-      "\C-a" => :rl_insert  ,
-      "\C-b" => :rl_insert  ,
-      "\C-c" => :rl_insert  ,
-      "\C-d" => :rl_vi_eof_maybe  ,
-      "\C-e" => :rl_insert  ,
-      "\C-f" => :rl_insert  ,
-      "\C-g" => :rl_insert  ,
-      "\C-h" => :rl_rubout  ,
-      "\C-i" => :rl_complete  ,
-      "\C-j" => :rl_newline  ,
-      "\C-k" => :rl_insert  ,
-      "\C-l" => :rl_insert  ,
-      "\C-m" => :rl_newline  ,
-      "\C-n" => :rl_insert  ,
-      "\C-o" => :rl_insert  ,
-      "\C-p" => :rl_insert  ,
-      "\C-q" => :rl_insert  ,
-      "\C-r" => :rl_reverse_search_history  ,
-      "\C-s" => :rl_forward_search_history  ,
-      "\C-t" => :rl_transpose_chars  ,
-      "\C-u" => :rl_unix_line_discard  ,
-      "\C-v" => :rl_quoted_insert  ,
-      "\C-w" => :rl_unix_word_rubout  ,
-      "\C-x" => :rl_insert  ,
-      "\C-y" => :rl_yank  ,
-      "\C-z" => :rl_insert  ,
-      "\C-[" => :rl_vi_movement_mode  ,
-      "\C-\\" => :rl_insert  ,
-      "\C-]" => :rl_insert  ,
-      "\C-^" => :rl_insert  ,
-      "\C-_" => :rl_vi_undo  ,
-      "\x7F" => :rl_rubout
+    "\C-a" => :rl_insert,
+    "\C-b" => :rl_insert,
+    "\C-c" => :rl_insert,
+    "\C-d" => :rl_vi_eof_maybe,
+    "\C-e" => :rl_insert,
+    "\C-f" => :rl_insert,
+    "\C-g" => :rl_insert,
+    "\C-h" => :rl_rubout,
+    "\C-i" => :rl_complete,
+    "\C-j" => :rl_newline,
+    "\C-k" => :rl_insert,
+    "\C-l" => :rl_insert,
+    "\C-m" => :rl_newline,
+    "\C-n" => :rl_insert,
+    "\C-o" => :rl_insert,
+    "\C-p" => :rl_insert,
+    "\C-q" => :rl_insert,
+    "\C-r" => :rl_reverse_search_history,
+    "\C-s" => :rl_forward_search_history,
+    "\C-t" => :rl_transpose_chars,
+    "\C-u" => :rl_unix_line_discard,
+    "\C-v" => :rl_quoted_insert,
+    "\C-w" => :rl_unix_word_rubout,
+    "\C-x" => :rl_insert,
+    "\C-y" => :rl_yank,
+    "\C-z" => :rl_insert,
+    "\C-[" => :rl_vi_movement_mode,
+    "\C-\\" => :rl_insert,
+    "\C-]" => :rl_insert,
+    "\C-^" => :rl_insert,
+    "\C-_" => :rl_vi_undo,
+    "\x7F" => :rl_rubout
   }
 
   @rl_library_version = RL_LIBRARY_VERSION
 
   @rl_readline_version = RL_READLINE_VERSION
 
-  @rl_readline_name = "other"
+  @rl_readline_name = 'other'
 
   @rl_getc_function = :rl_getc
 
@@ -769,7 +782,7 @@ module PrReadline
   @rl_num_chars_to_read = 0
 
   # Line buffer and maintenence.
-  @rl_line_buffer = ""
+  @rl_line_buffer = +''
 
   # Key sequence `contexts'
   @_rl_kscxt = nil
@@ -1115,14 +1128,15 @@ module PrReadline
   def rl_filename_completion_function(text, state)
     # If we don't have any state, then do some initialization.
     if (state == 0)
-      # If we were interrupted before closing the directory or reading
-      #all of its contents, close it.
+      # If we were interrupted before closing the directory or reading all of
+      # its contents, close it.
       if(@directory)
         @directory.close
         @directory = nil
       end
 
       text.delete!(0.chr)
+
       if text.length == 0
         @dirname = "."
         @filename = ""
@@ -2400,7 +2414,7 @@ module PrReadline
     require 'strscan'
 
     ss = StringScanner.new(seq)
-    new_seq = ''
+    new_seq = +''
 
     until ss.eos?
       char = ss.getch
@@ -7005,27 +7019,25 @@ module PrReadline
 
     # First, the basic settings to put us into character-at-a-time, no-echo
     #   input mode.
-    setting = " -echo -icrnl cbreak"
+    setting = +' -echo -icrnl cbreak'
 
     # If this terminal doesn't care how the 8th bit is used, then we can
     #   use it for the meta-key.  If only one of even or odd parity is
     #  specified, then the terminal is using parity, and we cannot.
     retry_if_interrupted do
       if (`stty -a`.scan(/-parenb\b/).first == '-parenb')
-        setting << " pass8"
+        setting << ' pass8'
       end
     end
 
-    setting << " -ixoff"
+    setting << ' -ixoff'
 
     rl_bind_key(@_rl_tty_chars.t_start, :rl_restart_output) unless @_rl_tty_chars.t_start.nil?
     @_rl_eof_char = @_rl_tty_chars.t_eof
 
-    #setting << " -isig"
+    # setting << ' -isig'
 
-    retry_if_interrupted do
-      `stty #{setting}`
-    end
+    retry_if_interrupted { `stty #{setting}` }
   end
 
   def _rl_control_keypad(on)
