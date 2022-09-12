@@ -1,18 +1,17 @@
-require 'readline'
+# warn_indent: true
+# frozen_string_literal: true
 
-list = [
-  'search', 'download', 'open',
-  'help', 'history', 'quit',
-  'url', 'next', 'clear',
-  'prev', 'past',
-].sort
+require 'pr-readline'
 
-comp = proc{ |s| list.grep( /^#{Regexp.escape(s)}/) }
+list = %w[search download open help history quit url next clear prev past]
+list.sort
 
-Readline.completion_append_character = " "
+comp = proc { |s| list.grep(/^#{Regexp.escape(s)}/) }
+
+Readline.completion_append_character = ' '
 Readline.completion_proc = comp
 
-while line = Readline.readline('> ', true)
+while (line = Readline.readline('> ', true))
   p line
   break if line == 'quit'
 end
