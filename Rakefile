@@ -9,7 +9,11 @@ require 'English'
 file 'Gemfile.lock' => ['pr-readline.gemspec'] do
   puts 'Running "bundle check"...' if verbose
   system('bundle', 'check')
-  abort '"bundle check" failed' unless $CHILD_STATUS&.exited? && $CHILD_STATUS&.success?
+
+  if $CHILD_STATUS&.exited? && $CHILD_STATUS&.success?
+    abort '"bundle check" failed'
+  end
+
   # Make sure Gemfile.lock's timestamps are updated to keep this rule from
   # again until pr-readline.gemspec is updated.
   now = Time.now
@@ -17,7 +21,7 @@ file 'Gemfile.lock' => ['pr-readline.gemspec'] do
 end
 
 Rake::TestTask.new do |t|
-  t.libs << "test"
+  t.libs << 'test'
 
   t.warning = true
   t.verbose = true
