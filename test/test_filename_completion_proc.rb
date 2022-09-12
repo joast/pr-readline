@@ -7,7 +7,7 @@
 # rubocop:disable Layout/LineLength
 
 require 'minitest/autorun'
-require 'readline'
+require 'pr-readline/readline'
 require 'fileutils'
 require 'rbconfig'
 require_relative 'support/filesystem_completion_helper'

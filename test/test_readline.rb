@@ -6,7 +6,7 @@
 # rubocop:disable Metrics/MethodLength
 
 require 'minitest/autorun'
-require 'readline'
+require 'pr-readline/readline'
 
 class TestReadline < Minitest::Test # :nodoc:
   def setup

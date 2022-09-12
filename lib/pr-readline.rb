@@ -7,5 +7,5 @@ unless defined? PrReadline
     Object.send(:remove_const, :Readline)
   end
 
-  require_relative 'readline'
+  require_relative 'pr-readline/readline'
 end

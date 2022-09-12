@@ -7,7 +7,7 @@
 # rubocop:disable Style/BlockDelimiters
 
 require 'minitest/autorun'
-require 'readline'
+require 'pr-readline/readline'
 
 class TestHistory < Minitest::Test # :nodoc:
   # PrReadline::HISTORY_WORD_DELIMITERS.inspect

@@ -10,7 +10,7 @@
 # Copyright (C) 2009 by Park Heesob phasis@gmail.com
 #
 
-require_relative 'pr-readline/version'
+require_relative 'version'
 
 module PrReadline # rubocop:disable Metrics/ModuleLength
   require 'etc'

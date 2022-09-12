@@ -17,7 +17,7 @@
 # rubocop:disable Metrics/PerceivedComplexity
 
 module Readline # :nodoc:
-  require_relative 'prreadline'
+  require_relative 'pr-readline'
   include PrReadline
 
   @completion_proc = nil
