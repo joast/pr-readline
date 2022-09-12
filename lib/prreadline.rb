@@ -8618,42 +8618,50 @@ module PrReadline
   #   if point is invalied (point < 0 || more than string length),
   #   it returns -1
   def _rl_adjust_point(string, point)
+    return -1 if (point < 0)
 
     length = string.length
-    return -1 if (point < 0)
     return -1 if (length < point)
 
     pos = 0
 
     case @encoding
-    when 'E'
+
+    when 'e'
       x = string.scan(/./me)
       i, len = 0, x.length
+
       while (pos < point && i < len)
         pos += x[i].length
         i += 1
       end
-    when 'S'
+
+    when 's'
       x = string.scan(/./ms)
       i, len = 0, x.length
+
       while (pos < point && i < len)
         pos += x[i].length
         i += 1
       end
-    when 'U'
+
+    when 'u'
       x = string.scan(/./mu)
       i, len = 0, x.length
+
       while (pos < point && i < len)
         pos += x[i].length
         i += 1
       end
+
     when 'X'
-      enc = string.encoding
-      str = string.force_encoding(@encoding_name)
+      str = string.dup.force_encoding(@encoding_name)
       len = str.length
+
       if point <= length / 2
         # count byte size from head
         i = 0
+
         while (pos < point && i < len)
           pos += str[i].bytesize
           i += 1
@@ -8662,16 +8670,18 @@ module PrReadline
         # count byte size from tail
         pos = str.bytesize
         i = len - 1
+
         while (pos > point && i >= 0)
           pos -= str[i].bytesize
           i -= 1
         end
+
         pos += str[i + 1].bytesize if pos < point
       end
-      string.force_encoding(enc)
     else
       pos = point
     end
+
     pos - point
   end
 
