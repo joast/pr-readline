@@ -10,9 +10,19 @@
 # Copyright (C) 2009 by Park Heesob phasis@gmail.com
 #
 
+# rubocop:disable Lint/MissingCopEnableDirective
+# rubocop:disable Metrics/AbcSize
+# rubocop:disable Metrics/BlockNesting
+# rubocop:disable Metrics/CyclomaticComplexity
+# rubocop:disable Metrics/MethodLength
+# rubocop:disable Metrics/ModuleLength
+# rubocop:disable Metrics/ParameterLists
+# rubocop:disable Metrics/PerceivedComplexity
+# rubocop:disable Naming/VariableName
+
 require_relative 'version'
 
-module PrReadline # rubocop:disable Metrics/ModuleLength
+module PrReadline # :nodoc:
   require 'etc'
 
   RL_LIBRARY_VERSION = '5.2'
@@ -549,7 +559,7 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     'W' => :rl_vi_next_word,
     'X' => :rl_vi_rubout,
     'Y' => :rl_vi_yank_to,
-    "\\" => :rl_vi_complete,
+    '\\' => :rl_vi_complete,
     '^' => :rl_vi_first_print,
     '_' => :rl_vi_yank_arg,
     '`' => :rl_vi_goto_mark,
@@ -648,14 +658,17 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   # True if this is `real' readline as opposed to some stub substitute.
   @rl_gnu_readline_p = true
 
-  for i in 32 .. 255
-    @emacs_standard_keymap[i.chr] = :rl_insert unless @emacs_standard_keymap[i.chr]
+  (32..255).each do |i|
+    unless @emacs_standard_keymap[i.chr]
+      @emacs_standard_keymap[i.chr] = :rl_insert
+    end
+
     @vi_insertion_keymap[i.chr] = :rl_insert unless @vi_insertion_keymap[i.chr]
   end
+
   # A pointer to the keymap that is currently in use.
   #   By default, it is the standard emacs keymap.
   @_rl_keymap = @emacs_standard_keymap
-
 
   # The current style of editing.
   @rl_editing_mode = @emacs_mode
@@ -717,11 +730,10 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   @ibuffer = 0.chr * 512
   @ibuffer_len = @ibuffer.length - 1
 
-
   # Non-zero means echo characters as they are read.  Defaults to no echo
   #   set to 1 if there is a controlling terminal, we can get its attributes,
-  #   and the attributes include `echo'.  Look at rltty.c:prepare_terminal_settings
-  #   for the code that sets it.
+  #   and the attributes include `echo'.
+  #   Look at rltty.c:prepare_terminal_settings for the code that sets it.
   @readline_echoing_p = false
 
   # Current prompt.
@@ -1028,10 +1040,10 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   @rl_ignore_some_completions_function = nil
 
   # Set to a function to quote a filename in an application-specific fashion.
-  #   Called with the text to quote, the type of match found (single or multiple)
-  #   and a pointer to the quoting character to be used, which the function can
-  #   reset if desired.
-  #rl_filename_quoting_function = rl_quote_filename
+  #   Called with the text to quote, the type of match found (single or
+  #   multiple) and a pointer to the quoting character to be used, which the
+  #   function can reset if desired.
+  # rl_filename_quoting_function = rl_quote_filename
 
   # Function to call to remove quoting characters from a filename.  Called
   #   before completion is attempted, so the embedded quotes do not interfere
@@ -1092,7 +1104,6 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   @if_stack = []
   @if_stack_depth = 0
 
-
   # The last key bindings file read.
   @last_readline_init_file = nil
 
@@ -1101,9 +1112,8 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   @current_readline_init_include_level = 0
   @current_readline_init_lineno = 0
 
-  ENV["HOME"] ||= "#{ENV["HOMEDRIVE"]}#{ENV["HOMEPATH"]}"
-  if !File.directory? ENV["HOME"]
-    raise RuntimeError.new("HOME environment variable (or HOMEDRIVE and HOMEPATH) must be set and point to a directory")
+  unless File.directory? Dir.home
+    raise "HOME directory (#{Dir.home}) must be a directory"
   end
 
   @directory = nil
@@ -1112,12 +1122,23 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   @users_dirname = nil
   @filename_len = 0
 
-  attr_accessor :rl_attempted_completion_function,:rl_deprep_term_function,
-    :rl_event_hook,:rl_attempted_completion_over,:rl_basic_quote_characters,
-    :rl_basic_word_break_characters,:rl_completer_quote_characters,
-    :rl_completer_word_break_characters,:rl_completion_append_character,
-    :rl_filename_quote_characters,:rl_instream,:rl_library_version,:rl_outstream,
-    :rl_readline_name,:history_length,:history_base,:rl_point
+  attr_accessor :history_base,
+                :history_length,
+                :rl_attempted_completion_function,
+                :rl_attempted_completion_over,
+                :rl_basic_quote_characters,
+                :rl_basic_word_break_characters,
+                :rl_completer_quote_characters,
+                :rl_completer_word_break_characters,
+                :rl_completion_append_character,
+                :rl_deprep_term_function,
+                :rl_event_hook,
+                :rl_filename_quote_characters,
+                :rl_instream,
+                :rl_library_version,
+                :rl_outstream,
+                :rl_point,
+                :rl_readline_name
 
   module_function
 
@@ -1127,27 +1148,27 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   # completion for a command.
   def rl_filename_completion_function(text, state)
     # If we don't have any state, then do some initialization.
-    if (state == 0)
+    if state.zero?
       # If we were interrupted before closing the directory or reading all of
       # its contents, close it.
-      if(@directory)
+      if @directory
         @directory.close
         @directory = nil
       end
 
       text.delete!(0.chr)
 
-      if text.length == 0
-        @dirname = "."
-        @filename = ""
-      elsif text.rindex(File::SEPARATOR) == text.length-1
+      if text.empty?
+        @dirname = '.'
+        @filename = ''
+      elsif text.rindex(File::SEPARATOR) == text.length - 1
         @dirname = text
-        @filename = ""
+        @filename = ''
       else
         @dirname, @filename = File.split(text)
 
         # This preserves the "./" when the user types "./dirname<tab>".
-        if @dirname == "." && text[0,2] == ".#{File::SEPARATOR}"
+        if @dirname == '.' && text[0, 2] == ".#{File::SEPARATOR}"
           @dirname += File::SEPARATOR
         end
       end
@@ -1157,30 +1178,34 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
       # Save the version of the directory that the user typed.
       @users_dirname = @dirname.dup
 
-      if (@dirname[0,1] == '~')
-        @dirname = File.expand_path(@dirname)
-      end
+      @dirname = File.expand_path(@dirname) if @dirname[0, 1] == '~'
 
-      # The directory completion hook should perform any necessary
-      #   dequoting.
-      if (@rl_directory_completion_hook && send(rl_directory_completion_hook,@dirname))
+      # The directory completion hook should perform any necessary dequoting.
+      if @rl_directory_completion_hook &&
+         send(rl_directory_completion_hook, @dirname)
         @users_dirname = @dirname.dup
-      elsif (@rl_completion_found_quote && @rl_filename_dequoting_function)
+      elsif @rl_completion_found_quote && @rl_filename_dequoting_function
         # delete single and double quotes
-        temp = send(@rl_filename_dequoting_function, @users_dirname, @rl_completion_quote_character)
+        temp = send(@rl_filename_dequoting_function, @users_dirname,
+                    @rl_completion_quote_character)
         @users_dirname = temp
         @dirname = @users_dirname.dup
       end
 
+      # rubocop:disable Lint/SuppressedException
+      # TODO: need a better way to handle Dir.new failure
       begin
         @directory = Dir.new(@dirname)
       rescue Errno::ENOENT, Errno::ENOTDIR, Errno::EACCES
       end
+      # rubocop:enable Lint/SuppressedException
 
       # Now dequote a non-null filename.
-      if (@filename && @filename.length>0 && @rl_completion_found_quote && @rl_filename_dequoting_function)
+      if @filename && !@filename.empty? && @rl_completion_found_quote &&
+         @rl_filename_dequoting_function
         # delete single and double quotes
-        temp = send(@rl_filename_dequoting_function, @filename, @rl_completion_quote_character)
+        temp = send(@rl_filename_dequoting_function, @filename,
+                    @rl_completion_quote_character)
         @filename = temp
       end
 
@@ -1196,23 +1221,27 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
 
     # Now that we have some state, we can read the directory.
     entry = nil
-    while(@directory && (entry = @directory.read))
+
+    while @directory && (entry = @directory.read)
       d_name = entry
       # Special case for no filename.  If the user has disabled the
       #   `match-hidden-files' variable, skip filenames beginning with `.'.
-      #All other entries except "." and ".." match.
-      if (@filename_len == 0)
-        next if (!@_rl_match_hidden_files && d_name[0,1] == '.')
-        break if (d_name != '.' && d_name != '..')
+      # All other entries except "." and ".." match.
+      if @filename_len.zero?
+        next if !@_rl_match_hidden_files && d_name[0, 1] == '.'
+        break if d_name != '.' && d_name != '..'
       else
         # Otherwise, if these match up to the length of filename, then
         #   it is a match.
 
-        if (@_rl_completion_case_fold)
-          break if d_name =~ /^#{Regexp.escape(@filename)}/i
+        # rubocop:disable Style/IfInsideElse
+        # TODO: rewrite this else block
+        if @_rl_completion_case_fold
+          break if d_name.match?(/^#{Regexp.escape(@filename)}/i)
         else
-          break if d_name =~ /^#{Regexp.escape(@filename)}/
+          break if d_name.match?(/^#{Regexp.escape(@filename)}/)
         end
+        # rubocop:enable Style/IfInsideElse
       end
     end
 
@@ -1221,72 +1250,67 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
         @directory.close
         @directory = nil
       end
+
       @dirname = nil
       @filename = nil
       @users_dirname = nil
 
       return nil
-    else
-      if (@dirname != '.')
-        if (@rl_complete_with_tilde_expansion && @users_dirname[0,1] == "~")
-          temp = @dirname
-          if(temp[-1,1] != File::SEPARATOR)
-            temp += File::SEPARATOR
-          end
-        else
-          temp = @users_dirname
-          if(temp[-1,1] != File::SEPARATOR)
-            temp += File::SEPARATOR
-          end
-        end
-        temp += entry
-      else
-        temp = entry.dup
-      end
-      return (temp)
     end
+
+    if @dirname == '.'
+      temp = entry.dup
+    else
+      temp = if @rl_complete_with_tilde_expansion &&
+                @users_dirname[0, 1] == '~'
+               @dirname
+             else
+               @users_dirname
+             end
+
+      temp += File::SEPARATOR if temp[-1, 1] != File::SEPARATOR
+      temp += entry
+    end
+
+    temp
   end
 
   # A completion function for usernames.
-  #   TEXT contains a partial username preceded by a random
-  #   character (usually `~').
+  #   TEXT contains a partial username preceded by a random character
+  #   (usually `~').
   def rl_username_completion_function(text, state)
-    return nil if RUBY_PLATFORM =~ /mswin|mingw/
+    return nil if RUBY_PLATFORM.match?(/mswin|mingw/)
 
-      if (state == 0)
-        first_char = text[0,1]
-        first_char_loc = (first_char == '~' ? 1 : 0)
+    if state.zero?
+      first_char = text[0, 1]
+      first_char_loc = (first_char == '~') ? 1 : 0
 
-        username = text[first_char_loc..-1]
-        namelen = username.length
-        Etc.setpwent()
-      end
+      username = text[first_char_loc..]
+      namelen = username.length
+      Etc.setpwent
+    end
 
-    while (entry = Etc.getpwent())
+    while (entry = Etc.getpwent)
       # Null usernames should result in all users as possible completions.
-      break if (namelen == 0 || entry.name =~ /^#{username}/ )
+      break if namelen.zero? || entry.name =~ /^#{username}/
     end
 
     if entry.nil?
-      Etc.endpwent()
-      return nil
+      Etc.endpwent
+      nil
     else
       value = text.dup
       value[first_char_loc..-1] = entry.name
-
-      if (first_char == '~')
-        @rl_filename_completion_desired = true
-      end
-
-      return (value)
+      @rl_filename_completion_desired = true if first_char == '~'
+      value
     end
   end
 
-  #*************************************************************
+  ########################################################################
   #
   #  Application-callable completion match generator functions
   #
-  #*************************************************************
+  ########################################################################
 
   # Return an array of (char *) which is a list of completions for TEXT.
   #   If there are no completions, return a NULL pointer.
@@ -1304,90 +1328,85 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     matches = 0
     match_list = []
     match_list[1] = nil
+
     while (string = send(entry_function, text, matches))
-      match_list[matches+=1] = string
-      match_list[matches+1] = nil
+      match_list[matches += 1] = string
+      match_list[matches + 1] = nil
     end
 
     # If there were any matches, then look through them finding out the
     # lowest common denominator.  That then becomes match_list[0].
-    if (matches!=0)
-      compute_lcd_of_matches(match_list, matches, text)
-    else                # There were no matches.
+    if matches.zero? # any matches?
       match_list = nil
+    else
+      compute_lcd_of_matches(match_list, matches, text)
     end
-    return (match_list)
+
+    match_list
   end
 
   def _rl_to_lower(char)
     char.nil? ? nil : char.chr.downcase
   end
 
-  # Find the common prefix of the list of matches, and put it into
-  #   matches[0].
+  # Find the common prefix of the list of matches, and put it into matches[0].
   def compute_lcd_of_matches(match_list, matches, text)
-    # If only one match, just use that.  Otherwise, compare each
-    #   member of the list with the next, finding out where they
-    #   stop matching.
-    if (matches == 1)
+    # If only one match, just use that.  Otherwise, compare each member of the
+    #   list with the next, finding out where they stop matching.
+    if matches == 1
       match_list[0] = match_list[1]
       match_list[1] = nil
       return 1
     end
 
     i = 1
-    low = 100000
-    while(i<matches)
-      if (@_rl_completion_case_fold)
-        si = 0
-        while((c1 = _rl_to_lower(match_list[i][si])) &&
-              (c2 = _rl_to_lower(match_list[i + 1][si])))
-          if !@rl_byte_oriented
-            if(!_rl_compare_chars(match_list[i],si,match_list[i+1],si))
-              break
-            elsif ((v = _rl_get_char_len(match_list[i][si..-1])) > 1)
-              si += v - 1
-            end
-          else
-            break if (c1 != c2)
+    low = 100_000
+
+    while i < matches
+      si = 0
+
+      if @_rl_completion_case_fold
+        while (c1 = _rl_to_lower(match_list[i][si])) &&
+              (c2 = _rl_to_lower(match_list[i + 1][si]))
+          if @rl_byte_oriented
+            break if c1 != c2
+          elsif !_rl_compare_chars(match_list[i], si, match_list[i + 1], si)
+            break
+          elsif (v = _rl_get_char_len(match_list[i][si..])) > 1
+            si += v - 1
           end
+
           si += 1
         end
       else
-        si = 0
-        while((c1 = match_list[i][si]) &&
-              (c2 = match_list[i + 1][si]))
-          if !@rl_byte_oriented
-            if(!_rl_compare_chars(match_list[i],si,match_list[i+1],si))
-              break
-            elsif ((v = _rl_get_char_len(match_list[i][si..-1])) > 1)
-              si += v - 1
-            end
-          else
-            break if (c1 != c2)
+        while (c1 = match_list[i][si]) && (c2 = match_list[i + 1][si])
+          if @rl_byte_oriented
+            break if c1 != c2
+          elsif !_rl_compare_chars(match_list[i], si, match_list[i + 1], si)
+            break
+          elsif (v = _rl_get_char_len(match_list[i][si..])) > 1
+            si += v - 1
           end
+
           si += 1
         end
       end
 
-      if (low > si)
-        low = si
-      end
+      low = si if low > si
       i += 1
     end
 
     # If there were multiple matches, but none matched up to even the
     #   first character, and the user typed something, use that as the
     #   value of matches[0].
-    if (low == 0 && text && text.length>0 )
+    if low.zero? && text && text.length.positive?
       match_list[0] = text.dup
     else
-      # XXX - this might need changes in the presence of multibyte chars
+      # TODO: this might need changes in the presence of multibyte chars
 
       # If we are ignoring case, try to preserve the case of the string
       # the user typed in the face of multiple matches differing in case.
-      if (@_rl_completion_case_fold)
-
+      if @_rl_completion_case_fold # rubocop:disable Style/IfInsideElse TODO:
         # We're making an assumption here:
         #  IF we're completing filenames AND
         #     the application has defined a filename dequoting function AND
@@ -1398,45 +1417,43 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
         #     the file system and needs to be dequoted here before we
         #     check against the list of matches
         #  FI
-        if (@rl_filename_completion_desired &&
-            @rl_filename_dequoting_function &&
-            @rl_completion_found_quote &&
-            @rl_filename_quoting_desired)
-
-          dtext = send(@rl_filename_dequoting_function,text, @rl_completion_quote_character)
+        if @rl_filename_completion_desired &&
+           @rl_filename_dequoting_function &&
+           @rl_completion_found_quote &&
+           @rl_filename_quoting_desired
+          dtext = send(@rl_filename_dequoting_function, text,
+                       @rl_completion_quote_character)
           text = dtext
         end
 
         # sort the list to get consistent answers.
-        match_list = [match_list[0]] + match_list[1..-1].sort
+        match_list = [match_list[0]] + match_list[1..].sort
 
         si = text.length
-        if (si <= low)
-          for i in 1 .. matches
-            if match_list[i][0,si] == text
-              match_list[0] = match_list[i][0,low]
+
+        if si <= low
+          (1..matches).each do |i|
+            if match_list[i][0, si] == text
+              match_list[0] = match_list[i][0, low]
               break
             end
             # no casematch, use first entry
-            if (i > matches)
-              match_list[0] = match_list[1][0,low]
-            end
+            match_list[0] = match_list[1][0, low] if i > matches
           end
         else
           # otherwise, just use the text the user typed.
-          match_list[0] = text[0,low]
+          match_list[0] = text[0, low]
         end
       else
-        match_list[0] = match_list[1][0,low]
+        match_list[0] = match_list[1][0, low]
       end
     end
 
-    return matches
+    matches
   end
 
-
   # This is a NOOP until the rest of Vi-mode is working.
-  def rl_vi_editing_mode(count, key)
+  def rl_vi_editing_mode(_count, _key)
     0
   end
 
@@ -1446,13 +1463,13 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
 
   # Switching from one mode to the other really just involves
   #   switching keymaps.
-  def rl_vi_insertion_mode(count, key)
+  def rl_vi_insertion_mode(_count, key)
     @_rl_keymap = @vi_insertion_keymap
     @_rl_vi_last_key_before_insert = key
     0
   end
 
-  def rl_emacs_editing_mode(count, key)
+  def rl_emacs_editing_mode(_count, _key)
     @rl_editing_mode = @emacs_mode
     _rl_set_insert_mode(RL_IM_INSERT, 1) # emacs mode default is insert mode
     @_rl_keymap = @emacs_standard_keymap
@@ -1464,82 +1481,79 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   end
 
   # Function for the rest of the library to use to set insert/overwrite mode.
-  def _rl_set_insert_mode(im, force)
-    @rl_insert_mode = im
+  def _rl_set_insert_mode(insert_mode, _force)
+    @rl_insert_mode = insert_mode
   end
 
   # Toggle overwrite mode.  A positive explicit argument selects overwrite
   #   mode.  A negative or zero explicit argument selects insert mode.
-  def rl_overwrite_mode(count, key)
-    if (!@rl_explicit_arg)
-      _rl_set_insert_mode(@rl_insert_mode ^ 1, 0)
-    elsif (count > 0)
-      _rl_set_insert_mode(RL_IM_OVERWRITE, 0)
+  def rl_overwrite_mode(count, _key)
+    if @rl_explicit_arg
+      if count.positive?
+        _rl_set_insert_mode(RL_IM_OVERWRITE, 0)
+      else
+        _rl_set_insert_mode(RL_IM_INSERT, 0)
+      end
     else
-      _rl_set_insert_mode(RL_IM_INSERT, 0)
+      _rl_set_insert_mode(@rl_insert_mode ^ 1, 0)
     end
+
     0
   end
 
-
   # A function for simple tilde expansion.
-  def rl_tilde_expand(ignore, key)
-    _end = @rl_point
+  def rl_tilde_expand(_ignore, _key)
+    # TODO: don't use _end
+    _end = @rl_point # rubocop:disable Lint/UnderscorePrefixedVariableName
     start = _end - 1
 
-    if (@rl_point == @rl_end && @rl_line_buffer[@rl_point,1] == '~' )
-      homedir = File.expand_path("~")
+    if @rl_point == @rl_end && @rl_line_buffer[@rl_point, 1] == '~'
+      homedir = File.expand_path('~')
       _rl_replace_text(homedir, start, _end)
-      return (0)
-    elsif (@rl_line_buffer[start,1] != '~')
-      while(!whitespace(@rl_line_buffer[start,1]) && start >= 0)
-        start -= 1
-      end
-      start+=1
+      return 0
+    elsif @rl_line_buffer[start, 1] != '~'
+      start -= 1 while !whitespace(@rl_line_buffer[start, 1]) && start >= 0
+      start += 1
     end
 
     _end = start
-    begin
-      _end+=1
-    end while(!whitespace(@rl_line_buffer[_end,1]) && _end < @rl_end)
 
-    if (whitespace(@rl_line_buffer[_end,1]) || _end >= @rl_end)
-      _end-=1
+    loop do
+      _end += 1
+      break if _end >= @rl_end || whitespace(@rl_line_buffer[_end, 1])
     end
 
-    # If the first character of the current word is a tilde, perform
-    #tilde expansion and insert the result.  If not a tilde, do
-    #   nothing.
-    if (@rl_line_buffer[start,1] == '~')
+    _end -= 1 if whitespace(@rl_line_buffer[_end, 1]) || _end >= @rl_end
 
+    # If the first character of the current word is a tilde, perform tilde
+    #   expansion and insert the result.  If not a tilde, do nothing.
+    if @rl_line_buffer[start, 1] == '~'
       len = _end - start + 1
-      temp = @rl_line_buffer[start,len]
+      temp = @rl_line_buffer[start, len]
       homedir = File.expand_path(temp)
-      temp = nil
 
       _rl_replace_text(homedir, start, _end)
     end
+
     0
   end
 
   # Clean up the terminal and readline state after catching a signal, before
   #   resending it to the calling application.
-  def rl_cleanup_after_signal()
-    _rl_clean_up_for_exit()
-    if (@rl_deprep_term_function)
-      send(@rl_deprep_term_function)
-    end
-    rl_clear_pending_input()
-    rl_clear_signals()
+  def rl_cleanup_after_signal
+    _rl_clean_up_for_exit
+    send(@rl_deprep_term_function) if @rl_deprep_term_function
+    rl_clear_pending_input
+    rl_clear_signals
   end
 
-  def _rl_clean_up_for_exit()
-    if @readline_echoing_p
-      _rl_move_vert(@_rl_vis_botlin)
-      @_rl_vis_botlin = 0
-      @rl_outstream.flush
-      rl_restart_output(1, 0)
-    end
+  def _rl_clean_up_for_exit
+    return unless @readline_echoing_p
+
+    _rl_move_vert(@_rl_vis_botlin)
+    @_rl_vis_botlin = 0
+    @rl_outstream.flush
+    rl_restart_output(1, 0)
   end
 
   # Move the cursor from _rl_last_c_pos to NEW, which are buffer indices.
@@ -1547,37 +1561,36 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   #   buffer index.)
   #   DATA is the contents of the screen line of interest; i.e., where
   #   the movement is being done.
-  def _rl_move_cursor_relative(new, data, start=0)
+  def _rl_move_cursor_relative(new, data, start = 0)
     woff = w_offset(@_rl_last_v_pos, @wrap_offset)
     cpos = @_rl_last_c_pos
 
-    if !@rl_byte_oriented
-      dpos = _rl_col_width(data, start, start+new)
+    if @rl_byte_oriented
+      dpos = new
+    else
+      dpos = _rl_col_width(data, start, start + new)
 
       # Use NEW when comparing against the last invisible character in the
       # prompt string, since they're both buffer indices and DPOS is a desired
       # display position.
-      if (new > @prompt_last_invisible)     # XXX - don't use woff here
+      if new > @prompt_last_invisible # TODO: don't use woff here
         dpos -= woff
         # Since this will be assigned to _rl_last_c_pos at the end (more
         #   precisely, _rl_last_c_pos == dpos when this function returns),
         #   let the caller know.
         @cpos_adjusted = true
       end
-    else
-      dpos = new
     end
+
     # If we don't have to do anything, then return.
-    if (cpos == dpos)
-      return
-    end
+    return if cpos == dpos
 
     if @hConsoleHandle
       csbi = Fiddle::Pointer.malloc(24)
-      @GetConsoleScreenBufferInfo.Call(@hConsoleHandle,csbi)
-      x,y = csbi[4,4].unpack('SS')
+      @GetConsoleScreenBufferInfo.Call(@hConsoleHandle, csbi)
+      _junk, y = csbi[4, 4].unpack('SS') # TODO: _junk was x... why?
       x = dpos
-      @SetConsoleCursorPosition.Call(@hConsoleHandle,y*65536+x)
+      @SetConsoleCursorPosition.Call(@hConsoleHandle, (y * 65_536) + x)
       @_rl_last_c_pos = dpos
       return
     end
@@ -1585,19 +1598,19 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     # It may be faster to output a CR, and then move forwards instead
     #   of moving backwards.
     # i == current physical cursor position.
-    if !@rl_byte_oriented
-      i = @_rl_last_c_pos
-    else
-      i = @_rl_last_c_pos - woff
-    end
+    i = if @rl_byte_oriented
+          @_rl_last_c_pos - woff
+        else
+          @_rl_last_c_pos
+        end
 
-    if (dpos == 0 || cr_faster(dpos, @_rl_last_c_pos) ||
-        (@_rl_term_autowrap && i == @_rl_screenwidth))
+    if dpos.zero? || cr_faster(dpos, @_rl_last_c_pos) ||
+       (@_rl_term_autowrap && i == @_rl_screenwidth)
       @rl_outstream.write(@_rl_term_cr)
       cpos = @_rl_last_c_pos = 0
     end
 
-    if (cpos < dpos)
+    if cpos < dpos
       # Move the cursor forward.  We do it by printing the command
       # to move the cursor forward if there is one, else print that
       # portion of the output buffer again.  Which is cheaper?
@@ -1615,74 +1628,69 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
       # in the buffer and we have to go back to the beginning of the screen
       # line.  In this case, we can use the terminal sequence to move forward
       # if it's available.
-      if !@rl_byte_oriented
-        if (@_rl_term_forward_char)
-          @rl_outstream.write(@_rl_term_forward_char * (dpos-cpos))
-        else
-          @rl_outstream.write(@_rl_term_cr)
-          @rl_outstream.write(data[start,new])
-        end
+      if @rl_byte_oriented
+        @rl_outstream.write(data[start + cpos, new - cpos])
+      elsif @_rl_term_forward_char
+        @rl_outstream.write(@_rl_term_forward_char * (dpos - cpos))
       else
-        @rl_outstream.write(data[start+cpos,new-cpos])
+        @rl_outstream.write(@_rl_term_cr)
+        @rl_outstream.write(data[start, new])
       end
-    elsif (cpos > dpos)
+    elsif cpos > dpos
       _rl_backspace(cpos - dpos)
     end
+
     @_rl_last_c_pos = dpos
   end
 
-
   # PWP: move the cursor up or down.
   def _rl_move_vert(to)
-    if (@_rl_last_v_pos == to || to > @_rl_screenheight)
-      return
-    end
+    return if @_rl_last_v_pos == to || to > @_rl_screenheight
 
-    if ((delta = to - @_rl_last_v_pos) > 0)
-      @rl_outstream.write("\n"*delta)
+    if (delta = to - @_rl_last_v_pos).positive?
+      @rl_outstream.write("\n" * delta)
       @rl_outstream.write("\r")
       @_rl_last_c_pos = 0
-    else
-      if(@_rl_term_up)
-        @rl_outstream.write(@_rl_term_up*(-delta))
-      end
+    elsif @_rl_term_up
+      @rl_outstream.write(@_rl_term_up * -delta)
     end
-    @_rl_last_v_pos = to        # Now TO is here
+
+    @_rl_last_v_pos = to # Now TO is here
   end
 
-  def rl_setstate(x)
-    (@rl_readline_state |= (x))
+  def rl_setstate(state)
+    @rl_readline_state |= state
   end
 
-  def rl_unsetstate(x)
-    (@rl_readline_state &= ~(x))
+  def rl_unsetstate(state)
+    @rl_readline_state &= ~state
   end
 
-  def rl_isstate(x)
-    (@rl_readline_state & (x))!=0
+  def rl_isstate(state)
+    (@rl_readline_state & state) != 0
   end
 
   # Clear any pending input pushed with rl_execute_next()
-  def rl_clear_pending_input()
+  def rl_clear_pending_input
     @rl_pending_input = 0
     rl_unsetstate(RL_STATE_INPUTPENDING)
     0
   end
 
-  def rl_restart_output(count, key)
+  def rl_restart_output(_count, _key)
     0
   end
 
-  def rl_clear_signals()
-    if Signal.list['WINCH']
-      trap "WINCH",@def_proc
-    end
+  def rl_clear_signals
+    trap 'WINCH', @def_proc
+  rescue ArgumentError
+    # operating system doesn't suppport WINCH
   end
 
-  def rl_set_signals()
-    if Signal.list['WINCH']
-      @def_proc = trap "WINCH",Proc.new{rl_sigwinch_handler(0)}
-    end
+  def rl_set_signals
+    return unless Signal.list['WINCH']
+
+    @def_proc = trap 'WINCH', proc { rl_sigwinch_handler(0) }
   end
 
   # Current implementation:
@@ -1693,129 +1701,136 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   #   \002 are assumed to be `visible'.
   def expand_prompt(pmt)
     # Short-circuit if we can.
-    if (@rl_byte_oriented && pmt[RL_PROMPT_START_IGNORE].nil?)
+    if @rl_byte_oriented && pmt[RL_PROMPT_START_IGNORE].nil?
       r = pmt.dup
       lp = r.length
       lip = 0
       niflp = 0
       vlp = lp
-      return [r,lp,lip,niflp,vlp]
+
+      return [r, lp, lip, niflp, vlp]
     end
 
     l = pmt.length
     ret = ''
-    invfl = 0    # invisible chars in first line of prompt
-    invflset = 0    # we only want to set invfl once
+    invfl = 0 # invisible chars in first line of prompt
+    invflset = 0 # we only want to set invfl once
 
     igstart = 0
     rl = 0
     ignoring = false
     last = ninvis = physchars = 0
-    for pi in 0 ... pmt.length
+
+    for pi in 0...pmt.length # rubocop:disable Style/For TODO: fix
       # This code strips the invisible character string markers
-      #RL_PROMPT_START_IGNORE and RL_PROMPT_END_IGNORE
-      if (!ignoring && pmt[pi,1] == RL_PROMPT_START_IGNORE)        # XXX - check ignoring?
+      # RL_PROMPT_START_IGNORE and RL_PROMPT_END_IGNORE
+      # TODO: check ignoring?
+      if !ignoring && pmt[pi, 1] == RL_PROMPT_START_IGNORE
         ignoring = true
         igstart = pi
         next
-      elsif (ignoring && pmt[pi,1] == RL_PROMPT_END_IGNORE)
+      elsif ignoring && pmt[pi, 1] == RL_PROMPT_END_IGNORE
         ignoring = false
-        if (pi != (igstart + 1))
-          last = ret.length - 1
-        end
+        last = ret.length - 1 if pi != (igstart + 1)
         next
-      else
-        if !@rl_byte_oriented
-          pind = pi
-          ind = _rl_find_next_mbchar(pmt, pind, 1, MB_FIND_NONZERO)
-          l = ind - pind
-          while (l>0)
-            l-=1
-            ret << pmt[pi]
-            pi += 1
-          end
-          if (!ignoring)
-            rl += ind - pind
-            physchars += _rl_col_width(pmt, pind, ind)
-          else
-            ninvis += ind - pind
-          end
-          pi-=1       # compensate for later increment
-        else
-          ret << pmt[pi]
-          if (!ignoring)
-            rl+=1            # visible length byte counter
-            physchars+=1
-          else
-            ninvis+=1        # invisible chars byte counter
-          end
+      elsif !@rl_byte_oriented
+        pind = pi
+        ind = _rl_find_next_mbchar(pmt, pind, 1, MB_FIND_NONZERO)
+        l = ind - pind
 
-          if (invflset == 0 && rl >= @_rl_screenwidth)
-            invfl = ninvis
-            invflset = 1
-          end
+        while l.positive?
+          l -= 1
+          ret << pmt[pi]
+          pi += 1
+        end
+
+        if ignoring
+          ninvis += ind - pind
+        else
+          rl += ind - pind
+          physchars += _rl_col_width(pmt, pind, ind)
+        end
+
+        pi -= 1 # compensate for later increment
+      else
+        ret << pmt[pi]
+
+        if ignoring
+          ninvis += 1 # invisible chars byte counter
+        else
+          rl += 1 # visible length byte counter
+          physchars += 1
+        end
+
+        if invflset.zero? && rl >= @_rl_screenwidth
+          invfl = ninvis
+          invflset = 1
         end
       end
     end
 
-    if (rl < @_rl_screenwidth)
-      invfl = ninvis
-    end
+    invfl = ninvis if rl < @_rl_screenwidth
     lp = rl
     lip = last
     niflp = invfl
     vlp = physchars
-    return [ret,lp,lip,niflp,vlp]
+    [ret, lp, lip, niflp, vlp]
   end
 
-
-  #*
-  #* Expand the prompt string into the various display components, if
-  #* necessary.
-  #*
-  #* local_prompt = expanded last line of string in rl_display_prompt
-  #*          (portion after the final newline)
-  #* local_prompt_prefix = portion before last newline of rl_display_prompt,
-  #*             expanded via expand_prompt
-  #* prompt_visible_length = number of visible characters in local_prompt
-  #* prompt_prefix_length = number of visible characters in local_prompt_prefix
-  #*
-  #* This function is called once per call to readline().  It may also be
-  #* called arbitrarily to expand the primary prompt.
-  #*
-  #* The return value is the number of visible characters on the last line
-  #* of the (possibly multi-line) prompt.
-  #*
+  # Expand the prompt string into the various display components, if necessary.
+  #
+  # local_prompt = expanded last line of string in rl_display_prompt
+  #          (portion after the final newline)
+  # local_prompt_prefix = portion before last newline of rl_display_prompt,
+  #             expanded via expand_prompt
+  # prompt_visible_length = number of visible characters in local_prompt
+  # prompt_prefix_length = number of visible characters in local_prompt_prefix
+  #
+  # This function is called once per call to readline().  It may also be
+  # called arbitrarily to expand the primary prompt.
+  #
+  # The return value is the number of visible characters on the last line
+  # of the (possibly multi-line) prompt.
+  #
   def rl_expand_prompt(prompt)
     @local_prompt = @local_prompt_prefix = nil
     @local_prompt_len = 0
     @prompt_last_invisible = @prompt_invis_chars_first_line = 0
     @prompt_visible_length = @prompt_physical_chars = 0
 
-    if (prompt.nil? || prompt == '')
-      return (0)
-    end
+    return 0 if prompt.nil? || prompt == ''
 
     pi = prompt.rindex("\n")
+
     if pi.nil?
       # The prompt is only one logical line, though it might wrap.
-      @local_prompt,@prompt_visible_length,@prompt_last_invisible,@prompt_invis_chars_first_line,@prompt_physical_chars = expand_prompt(prompt)
+      @local_prompt, @prompt_visible_length, @prompt_last_invisible,
+      @prompt_invis_chars_first_line, @prompt_physical_chars =
+        expand_prompt(prompt)
+
       @local_prompt_prefix = nil
       @local_prompt_len = @local_prompt ? @local_prompt.length : 0
-      return (@prompt_visible_length)
+      @prompt_visible_length
     else
       # The prompt spans multiple lines.
-      pi += 1 if prompt.length!=pi+1
+      pi += 1 if prompt.length != pi + 1
       t = pi
-      @local_prompt,@prompt_visible_length,@prompt_last_invisible,@prompt_invis_chars_first_line,@prompt_physical_chars = expand_prompt(prompt[pi..-1])
+
+      @local_prompt, @prompt_visible_length, @prompt_last_invisible,
+      @prompt_invis_chars_first_line, @prompt_physical_chars =
+        expand_prompt(prompt[pi..])
+
       c = prompt[t]
       prompt[t] = 0.chr
-      # The portion of the prompt string up to and including the
-      #final newline is now null-terminated.
-      @local_prompt_prefix,@prompt_prefix_length,_,_, = expand_prompt(prompt)
+
+      # The portion of the prompt string up to and including the final newline
+      # is now null-terminated.
+      @local_prompt_prefix, @prompt_prefix_length, = expand_prompt(prompt)
+
       prompt[t] = c
       @local_prompt_len = @local_prompt ? @local_prompt.length : 0
-      return (@prompt_prefix_length)
+
+      @prompt_prefix_length
     end
   end
 
@@ -1823,144 +1838,151 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   #   rl_callback_handler_install ().
   def rl_set_prompt(prompt)
     @rl_prompt = prompt ? prompt.dup : nil
-    @rl_display_prompt = @rl_prompt ? @rl_prompt : ""
+    @rl_display_prompt = @rl_prompt || ''
     @rl_visible_prompt_length = rl_expand_prompt(@rl_prompt)
     0
   end
 
-  def get_term_capabilities(buffer)
+  def get_term_capabilities(_buffer)
     hash = {}
-      `infocmp -C`.split(':').select{|x| x =~ /(.*)=(.*)/ and hash[$1]=$2.gsub("\\r", "\r").gsub('\\E',"\e").gsub(/\^(.)/){($1[0].ord ^ ((?a..?z).include?($1[0]) ? 0x60 : 0x40)).chr}}
-      @_rl_term_at7          =     hash["@7"]
-      @_rl_term_DC           =     hash["DC"]
-      @_rl_term_IC           =     hash["IC"]
-      @_rl_term_clreol       =     hash["ce"]
-      @_rl_term_clrpag       =     hash["cl"]
-      @_rl_term_cr           =     hash["cr"]
-      @_rl_term_dc           =     hash["dc"]
-      @_rl_term_ei           =     hash["ei"]
-      @_rl_term_ic           =     hash["ic"]
-      @_rl_term_im           =     hash["im"]
-      @_rl_term_kD           =     hash["kD"]
-      @_rl_term_kH           =     hash["kH"]
-      @_rl_term_kI           =     hash["kI"]
-      @_rl_term_kd           =     hash["kd"]
-      @_rl_term_ke           =     hash["ke"]
-      @_rl_term_kh           =     hash["kh"]
-      @_rl_term_kl           =     hash["kl"]
-      @_rl_term_kr           =     hash["kr"]
-      @_rl_term_ks           =     hash["ks"]
-      @_rl_term_ku           =     hash["ku"]
-      @_rl_term_backspace    =     hash["le"]
-      @_rl_term_mm           =     hash["mm"]
-      @_rl_term_mo           =     hash["mo"]
-      @_rl_term_forward_char =     hash["nd"]
-      @_rl_term_pc           =     hash["pc"]
-      @_rl_term_up           =     hash["up"]
-      @_rl_visible_bell      =     hash["vb"]
-      @_rl_term_vs           =     hash["vs"]
-      @_rl_term_ve           =     hash["ve"]
-      @tcap_initialized = true
+    # TODO: clean this up
+    # rubocop:disable Style/PerlBackrefs
+    # rubocop:disable Layout/LineLength
+    # rubocop:disable Style/CharacterLiteral
+    # rubocop:disable Performance/RangeInclude
+    `infocmp -C`.split(':').select { |x| x =~ /(.*)=(.*)/ and hash[$1] = $2.gsub('\\r', "\r").gsub('\\E', "\e").gsub(/\^(.)/) { ($1[0].ord ^ ((?a..?z).include?($1[0]) ? 0x60 : 0x40)).chr } }
+    # rubocop:enable Performance/RangeInclude
+    # rubocop:enable Style/CharacterLiteral
+    # rubocop:enable Layout/LineLength
+    # rubocop:enable Style/PerlBackrefs
+
+    @_rl_term_at7          =     hash['@7']
+    @_rl_term_DC           =     hash['DC']
+    @_rl_term_IC           =     hash['IC']
+    @_rl_term_clreol       =     hash['ce']
+    @_rl_term_clrpag       =     hash['cl']
+    @_rl_term_cr           =     hash['cr']
+    @_rl_term_dc           =     hash['dc']
+    @_rl_term_ei           =     hash['ei']
+    @_rl_term_ic           =     hash['ic']
+    @_rl_term_im           =     hash['im']
+    @_rl_term_kD           =     hash['kD']
+    @_rl_term_kH           =     hash['kH']
+    @_rl_term_kI           =     hash['kI']
+    @_rl_term_kd           =     hash['kd']
+    @_rl_term_ke           =     hash['ke']
+    @_rl_term_kh           =     hash['kh']
+    @_rl_term_kl           =     hash['kl']
+    @_rl_term_kr           =     hash['kr']
+    @_rl_term_ks           =     hash['ks']
+    @_rl_term_ku           =     hash['ku']
+    @_rl_term_backspace    =     hash['le']
+    @_rl_term_mm           =     hash['mm']
+    @_rl_term_mo           =     hash['mo']
+    @_rl_term_forward_char =     hash['nd']
+    @_rl_term_pc           =     hash['pc']
+    @_rl_term_up           =     hash['up']
+    @_rl_visible_bell      =     hash['vb']
+    @_rl_term_vs           =     hash['vs']
+    @_rl_term_ve           =     hash['ve']
+
+    @tcap_initialized = true
   end
 
   # Set the environment variables LINES and COLUMNS to lines and cols,
   #   respectively.
   def sh_set_lines_and_columns(lines, cols)
-    ENV["LINES"] = lines.to_s
-    ENV["COLUMNS"] = cols.to_s
+    ENV['LINES'] = lines.to_s
+    ENV['COLUMNS'] = cols.to_s
   end
 
   # Get readline's idea of the screen size.  TTY is a file descriptor open
   #   to the terminal.  If IGNORE_ENV is true, we do not pay attention to the
   #   values of $LINES and $COLUMNS.  The tests for TERM_STRING_BUFFER being
   #   non-null serve to check whether or not we have initialized termcap.
-  def _rl_get_screen_size(tty, ignore_env)
-
+  def _rl_get_screen_size(_tty, ignore_env)
     if @hConsoleHandle
       csbi = Fiddle::Pointer.malloc(24)
-      @GetConsoleScreenBufferInfo.Call(@hConsoleHandle,csbi)
-      wc,wr = csbi[0,4].unpack('SS')
+      @GetConsoleScreenBufferInfo.Call(@hConsoleHandle, csbi)
+      wc, wr = csbi[0, 4].unpack('SS')
       # wr,wc, = `mode con`.scan(/\d+\n/).map{|x| x.to_i}
       @_rl_screenwidth = wc
       @_rl_screenheight = wr
     else
       wr, wc = 0
+
       retry_if_interrupted do
-        wr, wc = `stty size`.split(' ').map { |x| x.to_i }
+        wr, wc = `stty size`.split.map(&:to_i)
       end
+
       @_rl_screenwidth = wc
       @_rl_screenheight = wr
-      if ignore_env==0 && ENV['LINES']
-        @_rl_screenheight = ENV['LINES'].to_i
-      end
-      if ignore_env==0 && ENV['COLUMNS']
+
+      @_rl_screenheight = ENV['LINES'].to_i if ignore_env.zero? && ENV['LINES']
+
+      if ignore_env.zero? && ENV['COLUMNS']
         @_rl_screenwidth = ENV['COLUMNS'].to_i
       end
     end
 
     # If all else fails, default to 80x24 terminal.
-    if @_rl_screenwidth.nil? || @_rl_screenwidth <= 1
-      @_rl_screenwidth = 80
-    end
-    if @_rl_screenheight.nil? || @_rl_screenheight <= 0
-      @_rl_screenheight = 24
-    end
+    @_rl_screenwidth = 80 if @_rl_screenwidth.nil? || @_rl_screenwidth <= 1
+    @_rl_screenheight = 24 if @_rl_screenheight.nil? || @_rl_screenheight <= 0
+
     # If we're being compiled as part of bash, set the environment
     #   variables $LINES and $COLUMNS to new values.  Otherwise, just
     #   do a pair of putenv () or setenv () calls.
     sh_set_lines_and_columns(@_rl_screenheight, @_rl_screenwidth)
 
-    if !@_rl_term_autowrap
-      @_rl_screenwidth-=1
-    end
+    @_rl_screenwidth -= 1 unless @_rl_term_autowrap
+
     @_rl_screenchars = @_rl_screenwidth * @_rl_screenheight
   end
 
   def tgetflag(name)
-      `infocmp -C -r`.scan(/\w{2}/).include?(name)
+    `infocmp -C -r`.scan(/\w{2}/).include?(name)
   end
 
   # Return the function (or macro) definition which would be invoked via
   #   KEYSEQ if executed in MAP.  If MAP is NULL, then the current keymap is
   #   used.  TYPE, if non-NULL, is a pointer to an int which will receive the
-  #   type of the object pointed to.  One of ISFUNC (function), ISKMAP (keymap),
-  #   or ISMACR (macro).
-  def rl_function_of_keyseq(keyseq, map, type)
+  #   type of the object pointed to.  One of ISFUNC (function), ISKMAP
+  #   (keymap), or ISMACR (macro).
+  def rl_function_of_keyseq(keyseq, map, _type)
     map ||= @_rl_keymap
     map[keyseq]
   end
 
-  # Bind the key sequence represented by the string KEYSEQ to
-  #   the arbitrary pointer DATA.  TYPE says what kind of data is
-  #   pointed to by DATA, right now this can be a function (ISFUNC),
-  #   a macro (ISMACR), or a keymap (ISKMAP).  This makes new keymaps
-  #   as necessary.  The initial place to do bindings is in MAP.
-  def rl_generic_bind(type, keyseq, data, map)
+  # Bind the key sequence represented by the string KEYSEQ to the arbitrary
+  #   pointer DATA.  TYPE says what kind of data is pointed to by DATA, right
+  #   now this can be a function (ISFUNC), a macro (ISMACR), or a keymap
+  #   (ISKMAP).  This makes new keymaps as necessary.  The initial place to do
+  #   bindings is in MAP.
+  def rl_generic_bind(_type, keyseq, data, map)
     map[keyseq] = data
     0
   end
 
-  # Bind the key sequence represented by the string KEYSEQ to
-  #   FUNCTION.  This makes new keymaps as necessary.  The initial
-  #   place to do bindings is in MAP.
+  # Bind the key sequence represented by the string KEYSEQ to FUNCTION.  This
+  #   makes new keymaps as necessary.  The initial place to do bindings is in
+  #   MAP.
   def rl_bind_keyseq_in_map(keyseq, function, map)
     rl_generic_bind(ISFUNC, keyseq, function, map)
   end
-
 
   # Bind key sequence KEYSEQ to DEFAULT_FUNC if KEYSEQ is unbound.  Right
   #   now, this is always used to attempt to bind the arrow keys, hence the
   #   check for rl_vi_movement_mode.
   def rl_bind_keyseq_if_unbound_in_map(keyseq, default_func, kmap)
-    if (keyseq)
-      func = rl_function_of_keyseq(keyseq, kmap, nil)
-      if (func.nil? || func == :rl_vi_movement_mode)
-        return (rl_bind_keyseq_in_map(keyseq, default_func, kmap))
-      else
-        return 1
-      end
+    return 0 unless keyseq
+
+    func = rl_function_of_keyseq(keyseq, kmap, nil)
+
+    if func.nil? || func == :rl_vi_movement_mode
+      rl_bind_keyseq_in_map(keyseq, default_func, kmap)
+    else
+      1
     end
-    0
   end
 
   def rl_bind_keyseq_if_unbound(keyseq, default_func)
@@ -1978,7 +2000,7 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     rl_bind_keyseq_if_unbound(@_rl_term_kl, :rl_backward_char)
 
     rl_bind_keyseq_if_unbound(@_rl_term_kh, :rl_beg_of_line) # Home
-    rl_bind_keyseq_if_unbound(@_rl_term_at7, :rl_end_of_line)   # End
+    rl_bind_keyseq_if_unbound(@_rl_term_at7, :rl_end_of_line) # End
 
     rl_bind_keyseq_if_unbound(@_rl_term_kD, :rl_delete)
     rl_bind_keyseq_if_unbound(@_rl_term_kI, :rl_overwrite_mode)
@@ -1987,12 +2009,12 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   end
 
   def _rl_init_terminal_io(terminal_name)
-    term = terminal_name ? terminal_name : ENV["TERM"]
+    term = terminal_name || ENV.fetch('TERM', 'dumb')
     @_rl_term_clrpag = @_rl_term_cr = @_rl_term_clreol = nil
     tty = @rl_instream ? @rl_instream.fileno : 0
 
     if no_terminal?
-      term = "dumb"
+      term = 'dumb'
       @_rl_bind_stty_chars = false
     end
 
@@ -2002,21 +2024,21 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
 
     buffer = @term_string_buffer
 
-    tgetent_ret = (term != "dumb") ? 1 : -1
+    tgetent_ret = (term != 'dumb') ? 1 : -1
 
-    if (tgetent_ret <= 0)
+    if tgetent_ret.negative?
       buffer = @term_buffer = @term_string_buffer = nil
 
-      @_rl_term_autowrap = false    # used by _rl_get_screen_size
+      @_rl_term_autowrap = false # used by _rl_get_screen_size
 
       # Allow calling application to set default height and width, using
-      #rl_set_screen_size
-      if (@_rl_screenwidth <= 0 || @_rl_screenheight <= 0)
+      # rl_set_screen_size
+      if @_rl_screenwidth <= 0 || @_rl_screenheight <= 0
         _rl_get_screen_size(tty, 0)
       end
 
       # Defaults.
-      if (@_rl_screenwidth <= 0 || @_rl_screenheight <= 0)
+      if @_rl_screenwidth <= 0 || @_rl_screenheight <= 0
         @_rl_screenwidth = 79
         @_rl_screenheight = 24
       end
@@ -2045,20 +2067,22 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     get_term_capabilities(buffer)
 
     @_rl_term_cr ||= "\r"
-    @_rl_term_autowrap = !!(tgetflag("am") && tgetflag("xn"))
+    # rubocop:disable Style/DoubleNegation
+    @_rl_term_autowrap = !!(tgetflag('am') && tgetflag('xn')) # TODO: correct?
+    # rubocop:enable Style/DoubleNegation
 
     # Allow calling application to set default height and width, using
     #   rl_set_screen_size
-    if (@_rl_screenwidth <= 0 || @_rl_screenheight <= 0)
+    if @_rl_screenwidth <= 0 || @_rl_screenheight <= 0
       _rl_get_screen_size(tty, 0)
     end
 
     # Check to see if this terminal has a meta key and clear the capability
     #   variables if there is none.
-    @term_has_meta = !!(tgetflag("km") || tgetflag("MT"))
-    if !@term_has_meta
-      @_rl_term_mm = @_rl_term_mo = nil
-    end
+    # rubocop:disable Style/DoubleNegation
+    @term_has_meta = !!(tgetflag('km') || tgetflag('MT')) # TODO: correct?
+    # rubocop:enable Style/DoubleNegation
+    @_rl_term_mm = @_rl_term_mo = nil unless @term_has_meta
 
     # Attempt to find and bind the arrow keys.  Do not override already
     #   bound keys in an overzealous attempt, however.
@@ -2068,17 +2092,29 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     bind_termcap_arrow_keys(@vi_movement_keymap)
     bind_termcap_arrow_keys(@vi_insertion_keymap)
 
-    return 0
+    0
   end
 
   # New public way to set the system default editing chars to their readline
   #   equivalents.
   def rl_tty_set_default_bindings(kmap)
     h = {}
+
     retry_if_interrupted do
       h = Hash[*`stty -a`.scan(/(\w+) = ([^;]+);/).flatten]
     end
-    h.each {|k,v| v.gsub!(/\^(.)/){($1[0].ord ^ ((?a..?z).include?($1[0]) ? 0x60 : 0x40)).chr}}
+
+    # TODO: clean this up
+    # rubocop:disable Style/PerlBackrefs
+    # rubocop:disable Style/CharacterLiteral
+    # rubocop:disable Performance/RangeInclude
+    # rubocop:disable Layout/LineLength
+    h.each { |_k, v| v.gsub!(/\^(.)/) { ($1[0].ord ^ ((?a..?z).include?($1[0]) ? 0x60 : 0x40)).chr } }
+    # rubocop:enable Layout/LineLength
+    # rubocop:enable Performance/RangeInclude
+    # rubocop:enable Style/CharacterLiteral
+    # rubocop:enable Style/PerlBackrefs
+
     kmap[h['erase']] = :rl_rubout
     kmap[h['kill']] = :rl_unix_line_discard
     kmap[h['werase']] = :rl_unix_word_rubout
@@ -2088,16 +2124,13 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   # If this system allows us to look at the values of the regular
   #   input editing characters, then bind them to their readline
   #   equivalents, iff the characters are not bound to keymaps.
-  def readline_default_bindings()
-    if @_rl_bind_stty_chars
-      rl_tty_set_default_bindings(@_rl_keymap)
-    end
+  def readline_default_bindings
+    rl_tty_set_default_bindings(@_rl_keymap) if @_rl_bind_stty_chars
   end
 
-  def _rl_init_eightbit()
-
+  def _rl_init_eightbit
+    # TODO: what should this do? anything?
   end
-
 
   # Do key bindings from a file.  If FILENAME is NULL it defaults
   #   to the first non-null filename from this list:
@@ -2110,21 +2143,24 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   def rl_read_init_file(filename)
     # Default the filename.
     filename ||= @last_readline_init_file
-    filename ||= ENV["INPUTRC"]
-    if (filename.nil? || filename == '')
+    filename ||= ENV.fetch('INPUTRC', nil)
+
+    if filename.nil? || filename == ''
       filename = DEFAULT_INPUTRC
+
       # Try to read DEFAULT_INPUTRC; fall back to SYS_INPUTRC on failure
-      if (_rl_read_init_file(filename, 0) == 0)
-        return 0
-      end
+      return 0 if _rl_read_init_file(filename, 0).zero?
+
       filename = SYS_INPUTRC
     end
 
-    if RUBY_PLATFORM =~ /mswin|mingw/
-      return 0 if (_rl_read_init_file(filename, 0) == 0)
-      filename = "~/_inputrc"
+    if RUBY_PLATFORM.match?(/mswin|mingw/i)
+      return 0 if _rl_read_init_file(filename, 0).zero?
+
+      filename = '~/_inputrc'
     end
-    return (_rl_read_init_file(filename, 0))
+
+    _rl_read_init_file(filename, 0)
   end
 
   def _rl_read_init_file(filename, include_level)
@@ -2132,16 +2168,16 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     @current_readline_init_include_level = include_level
 
     openname = File.expand_path(filename)
+
     begin
       buffer = nil
-      File.open(openname) do |file|
-        buffer = file.read
-      end
-    rescue
+      File.open(openname) { |file| buffer = file.read }
+    rescue # rubocop:disable Style/RescueStandardError
+      # TODO: should rescue something
       return -1
     end
 
-    if (include_level == 0 && filename != @last_readline_init_file)
+    if include_level.zero? && filename != @last_readline_init_file
       @last_readline_init_file = filename.dup
     end
 
@@ -2153,87 +2189,88 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
 
     buffer.each_line do |line|
       line.strip!
-      next if line =~ /^#/
-      next if line == ''
-      rl_parse_and_bind(line)
+      rl_parse_and_bind(line) unless line.empty? || line.match?(/^#/)
     end
 
-    return 0
+    0
   end
 
-  # Push _rl_parsing_conditionalized_out, and set parser state based
-  #   on ARGS.
+  # Push _rl_parsing_conditionalized_out, and set parser state based on ARGS.
   def parser_if(args)
     # Push parser state.
     @if_stack << @_rl_parsing_conditionalized_out
 
-    # If parsing is turned off, then nothing can turn it back on except
-    #   for finding the matching endif.  In that case, return right now.
-    if @_rl_parsing_conditionalized_out
-      return 0
-    end
+    # If parsing is turned off, then nothing can turn it back on except for
+    #   finding the matching endif.  In that case, return right now.
+    return 0 if @_rl_parsing_conditionalized_out
 
     args.downcase!
-    # Handle "$if term=foo" and "$if mode=emacs" constructs.  If this
-    #   isn't term=foo, or mode=emacs, then check to see if the first
-    #   word in ARGS is the same as the value stored in rl_readline_name.
-    if (@rl_terminal_name && args =~ /^term=/)
+
+    # Handle "$if term=foo" and "$if mode=emacs" constructs.  If this isn't
+    #   term=foo, or mode=emacs, then check to see if the first word in ARGS
+    #   is the same as the value stored in rl_readline_name.
+    if @rl_terminal_name && args =~ /^term=/
       # Terminals like "aaa-60" are equivalent to "aaa".
-      tname = @rl_terminal_name.downcase.gsub(/-.*$/,'')
+      tname = @rl_terminal_name.downcase.gsub(/-.*$/, '')
 
       # Test the `long' and `short' forms of the terminal name so that
-      #if someone has a `sun-cmd' and does not want to have bindings
-      #that will be executed if the terminal is a `sun', they can put
-      #`$if term=sun-cmd' into their .inputrc.
-      @_rl_parsing_conditionalized_out = (args[5..-1] != tname && args[5..-1] != @rl_terminal_name.downcase)
-    elsif args =~ /^mode=/
-      if args[5..-1] == "emacs"
-        mode = @emacs_mode
-      elsif args[5..-1] == "vi"
-        mode = @vi_mode
-      else
-        mode = @no_mode
-      end
-    @_rl_parsing_conditionalized_out = (mode != @rl_editing_mode)
-    # Check to see if the first word in ARGS is the same as the
-    #   value stored in rl_readline_name.
-    elsif (args == @rl_readline_name)
-      @_rl_parsing_conditionalized_out = false
+      # if someone has a `sun-cmd' and does not want to have bindings
+      # that will be executed if the terminal is a `sun', they can put
+      # `$if term=sun-cmd' into their .inputrc.
+      @_rl_parsing_conditionalized_out = \
+        (args[5..] != tname && args[5..] != @rl_terminal_name.downcase)
+    elsif args.match?(/^mode=/)
+      mode = case args[5..]
+             when 'emacs'
+               @emacs_mode
+             when 'vi'
+               @vi_mode
+             else
+               @no_mode
+             end
+
+      @_rl_parsing_conditionalized_out = (mode != @rl_editing_mode)
+
+      # Check to see if the first word in ARGS is the same as the value stored
+      #   in rl_readline_name.
     else
-      @_rl_parsing_conditionalized_out = true
+      @_rl_parsing_conditionalized_out = args == @rl_readline_name
     end
-    return 0
+
+    0
   end
 
   # Invert the current parser state if there is anything on the stack.
-  def parser_else(args)
+  def parser_else(_args)
     if @if_stack.empty?
-      #_rl_init_file_error ("$else found without matching $if")
+      # _rl_init_file_error ("$else found without matching $if")
       return 0
     end
 
-    # Check the previous (n) levels of the stack to make sure that
-    #   we haven't previously turned off parsing.
-    return 0 if @if_stack.detect {|x| x }
+    # Check the previous (n) levels of the stack to make sure that we haven't
+    #   previously turned off parsing.
+    return 0 if @if_stack.detect { |x| x }
 
     # Invert the state of parsing if at top level.
     @_rl_parsing_conditionalized_out = !@_rl_parsing_conditionalized_out
-    return 0
+
+    0
   end
 
   # Terminate a conditional, popping the value of
   #   _rl_parsing_conditionalized_out from the stack.
-  def parser_endif(args)
-    if (@if_stack.length>0)
+  def parser_endif(_args)
+    if @if_stack.length.positive?
       @_rl_parsing_conditionalized_out = @if_stack.pop
-    else
-      #_rl_init_file_error ("$endif without matching $if")
+    else # rubocop:disable Style/EmptyElse TODO: fix?
+      # _rl_init_file_error ("$endif without matching $if")
     end
+
     0
   end
 
   def parser_include(args)
-    return 0 if (@_rl_parsing_conditionalized_out)
+    return 0 if @_rl_parsing_conditionalized_out
 
     old_init_file = @current_readline_init_file
     old_line_number = @current_readline_init_lineno
@@ -2245,115 +2282,120 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     @current_readline_init_lineno = old_line_number
     @current_readline_init_include_level = old_include_level
 
-    return r
+    r
   end
 
   # Handle a parser directive.  STATEMENT is the line of the directive
   #   without any leading `$'.
   def handle_parser_directive(statement)
-
-    directive,args = statement.split(' ')
+    directive, args = statement.split
 
     case directive.downcase
-    when "if"
-      parser_if(args)
-      return 0
-    when "endif"
-      parser_endif(args)
-      return 0
-    when "else"
-      parser_else(args)
-      return 0
-    when "include"
-      parser_include(args)
-      return 0
-    end
 
-    #_rl_init_file_error("unknown parser directive")
-    return 1
+    when 'if'
+      parser_if(args)
+      0
+
+    when 'endif'
+      parser_endif(args)
+      0
+
+    when 'else'
+      parser_else(args)
+      0
+
+    when 'include'
+      parser_include(args)
+      0
+
+    else
+      # a_rl_init_file_error("unknown parser directive")
+      1
+    end
   end
 
-
-  def rl_variable_bind(name,value)
+  def rl_variable_bind(name, value)
     case name
-    when "bind-tty-special-chars"
-      @_rl_bind_stty_chars = value.nil? || value=='1' || value == 'on'
-    when "blink-matching-paren"
-      @rl_blink_matching_paren = value.nil? || value=='1' || value == 'on'
-    when "byte-oriented"
-      @rl_byte_oriented = value.nil? || value=='1' || value == 'on'
-    when "completion-ignore-case"
-      @_rl_completion_case_fold = value.nil? || value=='1' || value == 'on'
-    when "convert-meta"
-      @_rl_convert_meta_chars_to_ascii = value.nil? || value=='1' || value == 'on'
-    when "disable-completion"
-      @rl_inhibit_completion = value.nil? || value=='1' || value == 'on'
-    when "enable-keypad"
-      @_rl_enable_keypad = value.nil? || value=='1' || value == 'on'
-    when "expand-tilde"
-      @rl_complete_with_tilde_expansion = value.nil? || value=='1' || value == 'on'
-    when "history-preserve-point"
-      @_rl_history_preserve_point = value.nil? || value=='1' || value == 'on'
-    when "horizontal-scroll-mode"
-      @_rl_horizontal_scroll_mode = value.nil? || value=='1' || value == 'on'
-    when "input-meta"
-      @_rl_meta_flag = value.nil? || value=='1' || value == 'on'
-    when "mark-directories"
-      @_rl_complete_mark_directories = value.nil? || value=='1' || value == 'on'
-    when "mark-modified-lines"
-      @_rl_mark_modified_lines = value.nil? || value=='1' || value == 'on'
-    when "mark-symlinked-directories"
-      @_rl_complete_mark_symlink_dirs = value.nil? || value=='1' || value == 'on'
-    when "match-hidden-files"
-      @_rl_match_hidden_files = value.nil? || value=='1' || value == 'on'
-    when "meta-flag"
-      @_rl_meta_flag = value.nil? || value=='1' || value == 'on'
-    when "output-meta"
-      @_rl_output_meta_chars = value.nil? || value=='1' || value == 'on'
-    when "page-completions"
-      @_rl_page_completions = value.nil? || value=='1' || value == 'on'
-    when "prefer-visible-bell"
-      @_rl_prefer_visible_bell = value.nil? || value=='1' || value == 'on'
-    when "print-completions-horizontally"
-      @_rl_print_completions_horizontally = value.nil? || value=='1' || value == 'on'
-    when "show-all-if-ambiguous"
-      @_rl_complete_show_all = value.nil? || value=='1' || value == 'on'
-    when "show-all-if-unmodified"
-      @_rl_complete_show_unmodified = value.nil? || value=='1' || value == 'on'
-    when "visible-stats"
-      @rl_visible_stats = value.nil? || value=='1' || value == 'on'
-    when "bell-style"
-      case value
-      when "none","off"
-        @_rl_bell_preference = NO_BELL
-      when "audible", "on"
-        @_rl_bell_preference = AUDIBLE_BELL
-      when "visible"
-        @_rl_bell_preference = VISIBLE_BELL
-      else
-        @_rl_bell_preference = AUDIBLE_BELL
-      end
-    when "comment-begin"
+    when 'bind-tty-special-chars'
+      @_rl_bind_stty_chars = value.nil? || value == '1' || value == 'on'
+    when 'blink-matching-paren'
+      @rl_blink_matching_paren = value.nil? || value == '1' || value == 'on'
+    when 'byte-oriented'
+      @rl_byte_oriented = value.nil? || value == '1' || value == 'on'
+    when 'completion-ignore-case'
+      @_rl_completion_case_fold = value.nil? || value == '1' || value == 'on'
+    when 'convert-meta'
+      @_rl_convert_meta_chars_to_ascii =
+        value.nil? || value == '1' || value == 'on'
+    when 'disable-completion'
+      @rl_inhibit_completion = value.nil? || value == '1' || value == 'on'
+    when 'enable-keypad'
+      @_rl_enable_keypad = value.nil? || value == '1' || value == 'on'
+    when 'expand-tilde'
+      @rl_complete_with_tilde_expansion =
+        value.nil? || value == '1' || value == 'on'
+    when 'history-preserve-point'
+      @_rl_history_preserve_point = value.nil? || value == '1' || value == 'on'
+    when 'horizontal-scroll-mode'
+      @_rl_horizontal_scroll_mode = value.nil? || value == '1' || value == 'on'
+    when 'input-meta', 'meta-flag'
+      @_rl_meta_flag = value.nil? || value == '1' || value == 'on'
+    when 'mark-directories'
+      @_rl_complete_mark_directories =
+        value.nil? || value == '1' || value == 'on'
+    when 'mark-modified-lines'
+      @_rl_mark_modified_lines = value.nil? || value == '1' || value == 'on'
+    when 'mark-symlinked-directories'
+      @_rl_complete_mark_symlink_dirs =
+        value.nil? || value == '1' || value == 'on'
+    when 'match-hidden-files'
+      @_rl_match_hidden_files = value.nil? || value == '1' || value == 'on'
+    when 'output-meta'
+      @_rl_output_meta_chars = value.nil? || value == '1' || value == 'on'
+    when 'page-completions'
+      @_rl_page_completions = value.nil? || value == '1' || value == 'on'
+    when 'prefer-visible-bell'
+      @_rl_prefer_visible_bell = value.nil? || value == '1' || value == 'on'
+    when 'print-completions-horizontally'
+      @_rl_print_completions_horizontally =
+        value.nil? || value == '1' || value == 'on'
+    when 'show-all-if-ambiguous'
+      @_rl_complete_show_all = value.nil? || value == '1' || value == 'on'
+    when 'show-all-if-unmodified'
+      @_rl_complete_show_unmodified =
+        value.nil? || value == '1' || value == 'on'
+    when 'visible-stats'
+      @rl_visible_stats = value.nil? || value == '1' || value == 'on'
+    when 'bell-style'
+      @_rl_bell_preference = case value
+                             when 'none', 'off'
+                               NO_BELL
+                             when 'visible'
+                               VISIBLE_BELL
+                             else # 'audible', 'on'
+                               AUDIBLE_BELL
+                             end
+    when 'comment-begin'
       @_rl_comment_begin = value.dup
-    when "completion-query-items"
+    when 'completion-query-items'
       @rl_completion_query_items = value.to_i
-    when "editing-mode"
+    when 'editing-mode'
       case value
-      when "vi"
+      when 'vi'
         # This is a NOOP until the rest of Vi-mode is working.
-      when "emacs"
+      when 'emacs'
         @_rl_keymap = @emacs_standard_keymap
         @rl_editing_mode = @emacs_mode
       end
-    when "isearch-terminators"
+    when 'isearch-terminators'
       @_rl_isearch_terminators = instance_eval(value)
-    when "keymap"
+    when 'keymap'
       case value
-      when "emacs","emacs-standard","emacs-meta","emacs-ctlx"
+      when 'emacs', 'emacs-standard', 'emacs-meta', 'emacs-ctlx'
         @_rl_keymap = @emacs_standard_keymap
-      when "vi","vi-move","vi-command"
+      when 'vi', 'vi-move', 'vi-command'
         # This is a NOOP until the rest of Vi-mode is working.
-      when "vi-insert"
+      when 'vi-insert'
         # This is a NOOP until the rest of Vi-mode is working.
       end
     end
@@ -2361,52 +2403,55 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
 
   def rl_named_function(name)
     case name
-    when "accept-line"
+    when 'accept-line'
       return :rl_newline
-    when "arrow-key-prefix"
+    when 'arrow-key-prefix'
       return :rl_arrow_keys
-    when "backward-delete-char"
+    when 'backward-delete-char'
       return :rl_rubout
-    when "character-search"
+    when 'character-search'
       return :rl_char_search
-    when  "character-search-backward"
+    when 'character-search-backward'
       return :rl_backward_char_search
-    when "copy-region-as-kill"
+    when 'copy-region-as-kill'
       return :rl_copy_region_to_kill
-    when "delete-char"
+    when 'delete-char'
       return :rl_delete
-    when "delete-char-or-list"
+    when 'delete-char-or-list'
       return :rl_delete_or_show_completions
-    when "forward-backward-delete-char"
+    when 'forward-backward-delete-char'
       return :rl_rubout_or_delete
-    when "kill-whole-line"
+    when 'kill-whole-line'
       return :rl_kill_full_line
-    when "next-history"
+    when 'next-history'
       return :rl_get_next_history
-    when "non-incremental-forward-search-history"
+    when 'non-incremental-forward-search-history'
       return :rl_noninc_forward_search
-    when "non-incremental-reverse-search-history"
+    when 'non-incremental-reverse-search-history'
       return :rl_noninc_reverse_search
-    when "non-incremental-forward-search-history-again"
+    when 'non-incremental-forward-search-history-again'
       return :rl_noninc_forward_search_again
-    when "non-incremental-reverse-search-history-again"
+    when 'non-incremental-reverse-search-history-again'
       return :rl_noninc_reverse_search_again
-    when "redraw-current-line"
+    when 'redraw-current-line'
       return :rl_refresh_line
-    when "previous-history"
+    when 'previous-history'
       return :rl_get_previous_history
-    when "self-insert"
+    when 'self-insert'
       return :rl_insert
-    when "undo"
+    when 'undo'
       return :rl_undo_command
-    when "beginning-of-line"
+    when 'beginning-of-line'
       return :rl_beg_of_line
     else
-      if name =~ /^[-a-z]+$/
-        method = ('rl_' + name.gsub('-', '_')).to_sym
+      if name.match?(/^[-a-z]+$/)
+        # rubocop:disable Style/StringLiteralsInInterpolation
+        method = "rl_#{name.tr('-', '_')}".to_sym
+        # rubocop:enable Style/StringLiteralsInInterpolation
         return method if respond_to?(method)
       end
     end
+
     nil
   end
 
@@ -2467,24 +2512,27 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   #   a variable binding command looks like: set variable value.
   #   A new-style keybinding looks like "\C-x\C-x": exchange-point-and-mark.
   def rl_parse_and_bind(string)
-
     # If this is a parser directive, act on it.
-    if (string[0,1] == "$")
-      handle_parser_directive(string[1..-1])
+    if string[0, 1] == '$'
+      handle_parser_directive(string[1..])
       return 0
     end
 
     # If we aren't supposed to be parsing right now, then we're done.
     return 0 if @_rl_parsing_conditionalized_out
 
-    if string =~ /^set/i
-      _,var,value = string.downcase.split(' ')
+    if string.match?(/^set/i)
+      _, var, value = string.downcase.split
       rl_variable_bind(var, value)
       return 0
     end
 
     if string =~ /"(.*)"\s*:\s*(.*)$/
-      key, funname = $1, $2
+      # rubocop:disable Style/PerlBackrefs
+      # TODO: use ::Regexp.last_match(1)?
+      key = $1
+      funname = $2
+      # rubocop:enable Style/PerlBackrefs
       func = rl_named_function(funname)
       rl_bind_key(key, func) if func
     end
@@ -2492,28 +2540,25 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     0
   end
 
-
-  def _rl_enable_meta_key()
-    if(@term_has_meta && @_rl_term_mm)
-      @_rl_out_stream.write(@_rl_term_mm)
-    end
+  def _rl_enable_meta_key
+    @_rl_out_stream.write(@_rl_term_mm) if @term_has_meta && @_rl_term_mm
   end
 
-  def rl_set_keymap_from_edit_mode()
-    if (@rl_editing_mode == @emacs_mode)
+  def rl_set_keymap_from_edit_mode
+    if @rl_editing_mode == @emacs_mode
       @_rl_keymap = @emacs_standard_keymap
-    elsif (@rl_editing_mode == @vi_mode)
+    elsif @rl_editing_mode == @vi_mode
       @_rl_keymap = @vi_insertion_keymap
     end
   end
 
-  def rl_get_keymap_name_from_edit_mode()
-    if (@rl_editing_mode == @emacs_mode)
-      "emacs"
-    elsif (@rl_editing_mode == @vi_mode)
-      "vi"
+  def rl_get_keymap_name_from_edit_mode
+    if @rl_editing_mode == @emacs_mode
+      'emacs'
+    elsif @rl_editing_mode == @vi_mode
+      'vi'
     else
-      "none"
+      'none'
     end
   end
 
@@ -2522,7 +2567,7 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     xkeymap = @_rl_keymap
     @_rl_keymap = map
 
-    if RUBY_PLATFORM =~ /mswin|mingw/
+    if RUBY_PLATFORM.match?(/mswin|mingw/i)
       rl_bind_keyseq_if_unbound("\340H", :rl_get_previous_history) # Up
       rl_bind_keyseq_if_unbound("\340P", :rl_get_next_history) # Down
       rl_bind_keyseq_if_unbound("\340M", :rl_forward_char)  # Right
@@ -2555,14 +2600,14 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   # Try and bind the common arrow key prefixes after giving termcap and
   #   the inputrc file a chance to bind them and create `real' keymaps
   #   for the arrow key prefix.
-  def bind_arrow_keys()
+  def bind_arrow_keys
     bind_arrow_keys_internal(@emacs_standard_keymap)
     bind_arrow_keys_internal(@vi_movement_keymap)
     bind_arrow_keys_internal(@vi_insertion_keymap)
   end
 
   # Initialize the entire state of the world.
-  def readline_initialize_everything()
+  def readline_initialize_everything
     # Set up input and output if they are not already set up.
     @rl_instream ||= $stdin
 
@@ -2575,69 +2620,66 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     @_rl_out_stream = @rl_outstream
 
     # Allocate data structures.
-    @rl_line_buffer = ""
+    @rl_line_buffer = ''
 
     # Initialize the terminal interface.
-    @rl_terminal_name ||= ENV["TERM"]
+    @rl_terminal_name ||= ENV.fetch('TERM', nil)
     _rl_init_terminal_io(@rl_terminal_name)
 
     # Bind tty characters to readline functions.
-    readline_default_bindings()
+    readline_default_bindings
 
     # Decide whether we should automatically go into eight-bit mode.
-    _rl_init_eightbit()
+    _rl_init_eightbit
 
     # Read in the init file.
     rl_read_init_file(nil)
 
-    # XXX
-    if (@_rl_horizontal_scroll_mode && @_rl_term_autowrap)
+    # TODP: is this correct?
+    if @_rl_horizontal_scroll_mode && @_rl_term_autowrap
       @_rl_screenwidth -= 1
       @_rl_screenchars -= @_rl_screenheight
     end
 
     # Override the effect of any `set keymap' assignments in the
     #   inputrc file.
-    rl_set_keymap_from_edit_mode()
+    rl_set_keymap_from_edit_mode
 
     # Try to bind a common arrow key prefix, if not already bound.
-    bind_arrow_keys()
+    bind_arrow_keys
 
     # Enable the meta key, if this terminal has one.
-    if @_rl_enable_meta
-      _rl_enable_meta_key()
-    end
+    _rl_enable_meta_key if @_rl_enable_meta
 
-    # If the completion parser's default word break characters haven't
-    #   been set yet, then do so now.
+    # If the completion parser's default word break characters haven't been
+    #   set yet, then do so now.
     @rl_completer_word_break_characters ||= @rl_basic_word_break_characters
   end
 
-  def _rl_init_line_state()
+  def _rl_init_line_state
     @rl_point = @rl_end = @rl_mark = 0
-    @rl_line_buffer = ""
+    @rl_line_buffer = ''
   end
 
   # Set the history pointer back to the last entry in the history.
-  def _rl_start_using_history()
-    using_history()
+  def _rl_start_using_history
+    using_history
     @_rl_saved_line_for_history = nil
   end
-
 
   def cr_faster(new, cur)
     (new + 1) < (cur - new)
   end
 
-  #* _rl_last_c_pos is an absolute cursor position in multibyte locales and a
+  # _rl_last_c_pos is an absolute cursor position in multibyte locales and a
   #   buffer index in others.  This macro is used when deciding whether the
   #   current cursor position is in the middle of a prompt string containing
   #   invisible characters.
-  def prompt_ending_index()
-    if !@rl_byte_oriented
-      @prompt_physical_chars
+  def prompt_ending_index
+    if @rl_byte_oriented
+      @prompt_last_invisible + 1
     else
-      (@prompt_last_invisible+1)
+      @prompt_physical_chars
     end
   end
 
@@ -2648,66 +2690,70 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   #   they can hold at least MINSIZE characters.
   def init_line_structures(minsize)
     if @invisible_line.nil? # initialize it
-      if (@line_size < minsize)
-        @line_size = minsize
-      end
+      @line_size = minsize if @line_size < minsize
       @visible_line = 0.chr * @line_size
       @invisible_line = 0.chr * @line_size # 1.chr
-    elsif (@line_size < minsize)  # ensure it can hold MINSIZE chars
+    elsif @line_size < minsize # ensure it can hold MINSIZE chars
       @line_size *= 2
-      if (@line_size < minsize)
-        @line_size = minsize
-      end
-      @visible_line << 0.chr * (@line_size - @visible_line.length)
-      @invisible_line << 1.chr * (@line_size - @invisible_line.length)
+      @line_size = minsize if @line_size < minsize
+      @visible_line << (0.chr * (@line_size - @visible_line.length))
+      @invisible_line << (1.chr * (@line_size - @invisible_line.length))
     end
-    @visible_line[minsize,@line_size-minsize] = 0.chr * (@line_size-minsize)
-    @invisible_line[minsize,@line_size-minsize] = 1.chr * (@line_size-minsize)
 
-    if @vis_lbreaks.nil?
-      @inv_lbreaks = []
-      @vis_lbreaks = []
-      @_rl_wrapped_line = []
-      @inv_lbreaks[0] = @vis_lbreaks[0] = 0
-    end
+    @visible_line[minsize, @line_size - minsize] =
+      0.chr * (@line_size - minsize)
+
+    @invisible_line[minsize, @line_size - minsize] =
+      1.chr * (@line_size - minsize)
+
+    return unless @vis_lbreaks.nil?
+
+    @inv_lbreaks = []
+    @vis_lbreaks = []
+    @_rl_wrapped_line = []
+    @inv_lbreaks[0] = @vis_lbreaks[0] = 0
   end
 
   # Return the history entry at the current position, as determined by
   #   history_offset.  If there is no entry there, return a NULL pointer.
-  def current_history()
-    return ((@history_offset == @history_length) || @the_history.nil?) ? nil : @the_history[@history_offset]
+  def current_history
+    if @history_offset == @history_length || @the_history.nil?
+      nil
+    else
+      @the_history[@history_offset]
+    end
   end
 
-  def meta_char(c)
-    c > "\x7f" && c <= "\xff"
+  def meta_char(char)
+    char > "\x7f" && char <= "\xff"
   end
 
-  def ctrl_char(c)
-    c < "\x20"
+  def ctrl_char(char)
+    char < "\x20"
   end
 
-  def isprint(c)
-    c >= "\x20" && c < "\x7f"
+  def isprint(char)
+    char >= "\x20" && char < "\x7f"
   end
 
-  def whitespace(c)
-    (c == ' ' || c == "\t")
+  def whitespace(char)
+    [' ', "\t"].include?(char)
   end
 
   def w_offset(line, offset)
-    ((line) == 0 ? offset : 0)
+    line.zero? ? offset : 0
   end
 
   def vis_llen(l)
-    ((l) > @_rl_vis_botlin ? 0 : (@vis_lbreaks[l+1] - @vis_lbreaks[l]))
+    (l > @_rl_vis_botlin) ? 0 : (@vis_lbreaks[l + 1] - @vis_lbreaks[l])
   end
 
   def inv_llen(l)
-    (@inv_lbreaks[l+1] - @inv_lbreaks[l])
+    @inv_lbreaks[l + 1] - @inv_lbreaks[l]
   end
 
   def vis_chars(line)
-    @visible_line[@vis_lbreaks[line] .. -1]
+    @visible_line[@vis_lbreaks[line]..]
   end
 
   def vis_pos(line)
@@ -2715,17 +2761,16 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
   end
 
   def vis_line(line)
-    ((line) > @_rl_vis_botlin) ? "" : vis_chars(line)
+    (line > @_rl_vis_botlin) ? '' : vis_chars(line)
   end
 
   def inv_line(line)
-    @invisible_line[@inv_lbreaks[line] .. -1]
+    @invisible_line[@inv_lbreaks[line]..]
   end
 
   def m_offset(margin, offset)
-    ((margin) == 0 ? offset : 0)
+    margin.zero? ? offset : 0
   end
-
 
   # PWP: update_line() is based on finding the middle difference of each
   #   line on the screen; vis:
@@ -2754,23 +2799,38 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
       new.force_encoding('ASCII-8BIT')
     end
 
-    if !@rl_byte_oriented
-      temp = @_rl_last_c_pos
-    else
-      temp = @_rl_last_c_pos - w_offset(@_rl_last_v_pos, @visible_wrap_offset)
-    end
-    if (temp == @_rl_screenwidth && @_rl_term_autowrap && !@_rl_horizontal_scroll_mode &&
-        @_rl_last_v_pos == current_line - 1)
+    temp = if @rl_byte_oriented
+             @_rl_last_c_pos - w_offset(@_rl_last_v_pos, @visible_wrap_offset)
+           else
+             @_rl_last_c_pos
+           end
 
-      if (!@rl_byte_oriented)
+    if temp == @_rl_screenwidth && @_rl_term_autowrap &&
+       !@_rl_horizontal_scroll_mode && @_rl_last_v_pos == (current_line - 1)
+      if @rl_byte_oriented
+        if new[0, 1] == 0.chr
+          @rl_outstream.write(' ')
+        else
+          @rl_outstream.write(new[0, 1])
+        end
+
+        @_rl_last_c_pos = 1
+        @_rl_last_v_pos += 1
+
+        if old[ostart, 1] != 0.chr && new[0, 1] != 0.chr
+          old[ostart, 1] = new[0, 1]
+        end
+      else
         # This fixes only double-column characters, but if the wrapped
         #   character comsumes more than three columns, spaces will be
         #   inserted in the string buffer.
-        if (@_rl_wrapped_line[current_line] > 0)
+        if @_rl_wrapped_line[current_line].positive?
           _rl_clear_to_eol(@_rl_wrapped_line[current_line])
         end
 
-        if new[0,1] != 0.chr
+        if new[0, 1] == 0.chr
+          tempwidth = 0
+        else
           case @encoding
           when 'E'
             wc = new.scan(/./me)[0]
@@ -2783,184 +2843,165 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
           when 'U'
             wc = new.scan(/./mu)[0]
             ret = wc.length
-            tempwidth = wc.unpack('U').first >= 0x1000 ? 2 : 1
+            tempwidth = (wc.unpack1('U') >= 0x1000) ? 2 : 1
           when 'X'
-            wc = new[0..-1].force_encoding(@encoding_name)[0]
+            wc = new[0..].force_encoding(@encoding_name)[0]
             ret = wc.bytesize
-            tempwidth = wc.ord >= 0x1000 ? 2 : 1
+            tempwidth = (wc.ord >= 0x1000) ? 2 : 1
           else
             ret = 1
             tempwidth = 1
           end
-        else
-          tempwidth = 0
         end
 
-        if (tempwidth > 0)
+        if tempwidth.positive?
           bytes = ret
-          @rl_outstream.write(new[0,bytes])
+          @rl_outstream.write(new[0, bytes])
           @_rl_last_c_pos = tempwidth
-          @_rl_last_v_pos+=1
+          @_rl_last_v_pos += 1
 
-          if old[ostart,1] != 0.chr
+          if old[ostart, 1] == 0.chr
+            ret = 0
+          else
             case @encoding
             when 'E'
-              wc = old[ostart..-1].scan(/./me)[0]
+              wc = old[ostart..].scan(/./me)[0]
               ret = wc.length
             when 'S'
-              wc = old[ostart..-1].scan(/./ms)[0]
+              wc = old[ostart..].scan(/./ms)[0]
               ret = wc.length
             when 'U'
-              wc = old[ostart..-1].scan(/./mu)[0]
+              wc = old[ostart..].scan(/./mu)[0]
               ret = wc.length
             when 'X'
-              wc = old[ostart..-1].force_encoding(@encoding_name)[0]
+              wc = old[ostart..].force_encoding(@encoding_name)[0]
               ret = wc.bytesize
             end
-          else
-            ret = 0
           end
-          if (ret != 0 && bytes != 0)
+
+          if ret != 0 && bytes != 0
             if ret != bytes
-              len = old[ostart..-1].index(0.chr,ret)
-              old[ostart+bytes,len-ret] = old[ostart+ret,len-ret]
+              len = old[ostart..].index(0.chr, ret)
+              old[ostart + bytes, len - ret] = old[ostart + ret, len - ret]
             end
-            old[ostart,bytes] = new[0,bytes]
+
+            old[ostart, bytes] = new[0, bytes]
           end
         else
           @rl_outstream.write(' ')
           @_rl_last_c_pos = 1
-          @_rl_last_v_pos+=1
-          if (old[ostart,1] != 0.chr && new[0,1] != 0.chr)
-            old[ostart,1] = new[0,1]
-          end
-        end
+          @_rl_last_v_pos += 1
 
-      else
-        if (new[0,1] != 0.chr)
-          @rl_outstream.write(new[0,1])
-        else
-          @rl_outstream.write(' ')
-        end
-        @_rl_last_c_pos = 1
-        @_rl_last_v_pos+=1
-        if (old[ostart,1] != 0.chr && new[0,1] != 0.chr)
-          old[ostart,1] = new[0,1]
+          if old[ostart, 1] != 0.chr && new[0, 1] != 0.chr
+            old[ostart, 1] = new[0, 1]
+          end
         end
       end
     end
 
     # Find first difference.
-    if (!@rl_byte_oriented)
-      # See if the old line is a subset of the new line, so that the
-      # only change is adding characters.
-      temp = (omax < nmax) ? omax : nmax
-      if old[ostart,temp]==new[0,temp]
-        ofd = temp
-        nfd = temp
-      else
-        if (omax == nmax && new[0,omax]==old[ostart,omax])
-          ofd = omax
-          nfd = nmax
-        else
-          new_offset = 0
-          old_offset = ostart
-          ofd = 0
-          nfd = 0
-          while(ofd < omax && old[ostart+ofd,1] != 0.chr &&
-                _rl_compare_chars(old, old_offset, new, new_offset))
-
-            old_offset = _rl_find_next_mbchar(old, old_offset, 1, MB_FIND_ANY)
-            new_offset = _rl_find_next_mbchar(new, new_offset, 1, MB_FIND_ANY)
-            ofd = old_offset - ostart
-            nfd = new_offset
-          end
-        end
-      end
-    else
+    if @rl_byte_oriented
       ofd = 0
       nfd = 0
-      while(ofd < omax && old[ostart+ofd,1] != 0.chr && old[ostart+ofd,1] == new[nfd,1])
+
+      while ofd < omax && old[ostart + ofd, 1] != 0.chr &&
+            old[ostart + ofd, 1] == new[nfd, 1]
         ofd += 1
         nfd += 1
       end
-    end
+    else
+      # See if the old line is a subset of the new line, so that the only
+      # change is adding characters.
+      temp = (omax < nmax) ? omax : nmax
 
+      if old[ostart, temp] == new[0, temp]
+        ofd = temp
+        nfd = temp
+      elsif omax == nmax && new[0, omax] == old[ostart, omax]
+        ofd = omax
+        nfd = nmax
+      else
+        new_offset = 0
+        old_offset = ostart
+        ofd = 0
+        nfd = 0
+
+        while ofd < omax && old[ostart + ofd, 1] != 0.chr &&
+              _rl_compare_chars(old, old_offset, new, new_offset)
+          old_offset = _rl_find_next_mbchar(old, old_offset, 1, MB_FIND_ANY)
+          new_offset = _rl_find_next_mbchar(new, new_offset, 1, MB_FIND_ANY)
+          ofd = old_offset - ostart
+          nfd = new_offset
+        end
+      end
+    end
 
     # Move to the end of the screen line.  ND and OD are used to keep track
     #   of the distance between ne and new and oe and old, respectively, to
     #   move a subtraction out of each loop.
-    oe = old.index(0.chr,ostart+ofd) - ostart
-    if oe.nil? || oe>omax
-      oe = omax
-    end
+    oe = old.index(0.chr, ostart + ofd) - ostart
+    oe = omax if oe.nil? || oe > omax
 
-    ne = new.index(0.chr,nfd)
-    if ne.nil? || ne>omax
-      ne = nmax
-    end
+    ne = new.index(0.chr, nfd)
+    ne = nmax if ne.nil? || ne > omax
 
     # If no difference, continue to next line.
-    if (ofd == oe && nfd == ne)
-      return
-    end
+    return if ofd == oe && nfd == ne
 
+    wsatend = true # flag for trailing whitespace
 
-    wsatend = true       # flag for trailing whitespace
+    if @rl_byte_oriented
+      ols = oe - 1 # find last same
+      nls = ne - 1
 
-    if (!@rl_byte_oriented)
-
-      ols = _rl_find_prev_mbchar(old, ostart+oe, MB_FIND_ANY) - ostart
-      nls = _rl_find_prev_mbchar(new, ne, MB_FIND_ANY)
-      while ((ols > ofd) && (nls > nfd))
-
-        if (!_rl_compare_chars(old, ostart+ols, new, nls))
-          break
-        end
-        if (old[ostart+ols,1] == " ")
-          wsatend = false
-        end
-
-        ols = _rl_find_prev_mbchar(old, ols+ostart, MB_FIND_ANY) - ostart
-        nls = _rl_find_prev_mbchar(new, nls, MB_FIND_ANY)
+      while ols > ofd && nls > nfd && old[ostart + ols, 1] == new[nls, 1]
+        wsatend = false if old[ostart + ols, 1] != ' '
+        ols -= 1
+        nls -= 1
       end
     else
-      ols = oe - 1         # find last same
-      nls = ne - 1
-      while ((ols > ofd) && (nls > nfd) && old[ostart+ols,1] == new[nls,1])
-        if (old[ostart+ols,1] != " ")
-          wsatend = false
-        end
-        ols-=1
-        nls-=1
+      ols = _rl_find_prev_mbchar(old, ostart + oe, MB_FIND_ANY) - ostart
+      nls = _rl_find_prev_mbchar(new, ne, MB_FIND_ANY)
+
+      while ols > ofd && nls > nfd
+        break unless _rl_compare_chars(old, ostart + ols, new, nls)
+
+        wsatend = false if old[ostart + ols, 1] == ' '
+
+        ols = _rl_find_prev_mbchar(old, ols + ostart, MB_FIND_ANY) - ostart
+        nls = _rl_find_prev_mbchar(new, nls, MB_FIND_ANY)
       end
     end
 
-    if (wsatend)
+    if wsatend
       ols = oe
       nls = ne
-    elsif (!_rl_compare_chars(old, ostart+ols, new, nls))
-      if (old[ostart+ols,1] != 0.chr)         # don't step past the NUL
+    elsif !_rl_compare_chars(old, ostart + ols, new, nls)
+      if old[ostart + ols, 1] != 0.chr # don't step past the NUL
         if !@rl_byte_oriented
-          ols = _rl_find_next_mbchar(old, ostart+ols, 1, MB_FIND_ANY) - ostart
+          ols =
+            _rl_find_next_mbchar(old, ostart + ols, 1, MB_FIND_ANY) - ostart
         else
-          ols+=1
+          ols += 1
         end
       end
-      if (new[nls,1] != 0.chr )
-        if !@rl_byte_oriented
-          nls = _rl_find_next_mbchar(new, nls, 1, MB_FIND_ANY)
+
+      if new[nls, 1] != 0.chr
+        if @rl_byte_oriented
+          nls += 1
         else
-          nls+=1
+          nls = _rl_find_next_mbchar(new, nls, 1, MB_FIND_ANY)
         end
       end
     end
 
     # count of invisible characters in the current invisible line.
     current_invis_chars = w_offset(current_line, @wrap_offset)
-    if (@_rl_last_v_pos != current_line)
+
+    if @_rl_last_v_pos != current_line
       _rl_move_vert(current_line)
-      if (@rl_byte_oriented && current_line == 0 && @visible_wrap_offset!=0)
+
+      if @rl_byte_oriented && current_line.zero? && @visible_wrap_offset != 0
         @_rl_last_c_pos += @visible_wrap_offset
       end
     end
@@ -2968,14 +3009,14 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     # If this is the first line and there are invisible characters in the
     #   prompt string, and the prompt string has not changed, and the current
     #   cursor position is before the last invisible character in the prompt,
-    #   and the index of the character to move to is past the end of the prompt
-    #   string, then redraw the entire prompt string.  We can only do this
-    #   reliably if the terminal supports a `cr' capability.
+    #   and the index of the character to move to is past the end of the
+    #   prompt string, then redraw the entire prompt string.  We can only do
+    #   this reliably if the terminal supports a `cr' capability.
 
     #  This is not an efficiency hack -- there is a problem with redrawing
-    #  portions of the prompt string if they contain terminal escape
-    #  sequences (like drawing the `unbold' sequence without a corresponding
-    #  `bold') that manifests itself on certain terminals.
+    #  portions of the prompt string if they contain terminal escape sequences
+    #  (like drawing the `unbold' sequence without a corresponding `bold')
+    #  that manifests itself on certain terminals.
 
     lendiff = @local_prompt_len
 
@@ -3042,7 +3083,7 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     else
       col_temp = temp
     end
-    if (col_lendiff > 0) # XXX - was lendiff
+    if (col_lendiff > 0) # TODO: was lendiff
 
       # Non-zero if we're increasing the number of lines.
       gl = current_line >= @_rl_vis_botlin && inv_botlin > @_rl_vis_botlin
@@ -3103,7 +3144,7 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
         temp = nls - nfd
         if ((temp - lendiff) > 0)
           _rl_output_some_chars(new,(nfd + lendiff),temp - lendiff)
-          # XXX -- this bears closer inspection.  Fixes a redisplay bug
+          # TODO: this bears closer inspection.  Fixes a redisplay bug
           # reported against bash-3.0-alpha by Andreas Schwab involving
           # multibyte characters and prompt strings with invisible
           # characters, but was previously disabled.
@@ -3159,7 +3200,8 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
           # the prompt, we need to adjust _rl_last_c_pos in a multibyte locale
           # to account for the wrap offset and set cpos_adjusted accordingly.
           _rl_output_some_chars(new,nfd, temp)
-          @_rl_last_c_pos += col_temp      # XXX
+          @_rl_last_c_pos += col_temp # TODO: why?
+
           if !@rl_byte_oriented
             if current_line == 0 && @wrap_offset && nfd <= @prompt_last_invisible
               @_rl_last_c_pos -= @wrap_offset
@@ -3384,12 +3426,13 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     end
 
     while(_in < @rl_end)
-
       c = @rl_line_buffer[_in,1]
+
       if(c == 0.chr)
         @rl_end = _in
         break
       end
+
       if (!@rl_byte_oriented)
         case @encoding
         when 'U'
@@ -3400,7 +3443,8 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
           wc_width = wc ? wc.length : 1
         end
       end
-      if (out + 8 >= @line_size)    # XXX - 8 for \t
+
+      if (out + 8) >= @line_size # 8 for \t
         @line_size *= 2
         if @visible_line.length>=@line_size
           @visible_line = @visible_line[0,@line_size]
@@ -8924,9 +8968,14 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
 
 
 
-  module_function :rl_attempted_completion_function,:rl_deprep_term_function,
-    :rl_event_hook,:rl_attempted_completion_over,:rl_basic_quote_characters,
-    :rl_basic_word_break_characters,:rl_completer_quote_characters,
+  module_function \
+    :rl_attempted_completion_function,
+    :rl_deprep_term_function,
+    :rl_event_hook,
+    :rl_attempted_completion_over,
+    :rl_basic_quote_characters,
+    :rl_basic_word_break_characters,
+    :rl_completer_quote_characters,
     :rl_completer_word_break_characters,:rl_completion_append_character,
     :rl_filename_quote_characters,:rl_instream,:rl_library_version,:rl_outstream,
     :rl_readline_name,
@@ -8938,9 +8987,9 @@ module PrReadline # rubocop:disable Metrics/ModuleLength
     :rl_readline_name=,:history_length,:history_base,:rl_point
 
   def no_terminal?
-    term = ENV["TERM"]
-    term.nil? || (term == 'dumb') || (RUBY_PLATFORM =~ /mswin|mingw/)
+    term = ENV['TERM']
+    term.nil? || term == 'dumb' || RUBY_PLATFORM.match?(/mswin|mingw/i)
   end
-  private :no_terminal?
 
+  private :no_terminal?
 end

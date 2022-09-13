@@ -92,8 +92,8 @@ module Readline # :nodoc:
   #
   # Example:
   #
-  #    list = ['search', 'next', 'clear']
-  #    Readline.completion_proc = proc{ |s| list.grep( /^#{Regexp.escape(s)}/) }
+  #  list = ['search', 'next', 'clear']
+  #  Readline.completion_proc = proc { |s| list.grep( /^#{Regexp.escape(s)}/) }
   #
   def self.completion_proc=(proc)
     unless proc.respond_to? :call
