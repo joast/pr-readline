@@ -3272,11 +3272,11 @@ module PrReadline # :nodoc:
     @cpos_buffer_position = -1
 
     line = @invisible_line
-    out = inv_botlin = 0
+    out = 0
 
-    # Mark the line as modified or not.  We only do this for history
-    #   lines.
+    # Mark the line as modified or not.  We only do this for history lines.
     modmark = 0
+
     if @_rl_mark_modified_lines && current_history && @rl_undo_list
       line[out, 1] = '*'
       out += 1
@@ -3285,14 +3285,14 @@ module PrReadline # :nodoc:
     end
 
     # If someone thought that the redisplay was handled, but the currently
-    #   visible line has a different modification state than the one about
-    #   to become visible, then correct the caller's misconception.
+    # visible line has a different modification state than the one about to
+    # become visible, then correct the caller's misconception.
     @rl_display_fixed = false if @visible_line[0, 1] != @invisible_line[0, 1]
 
-    # If the prompt to be displayed is the `primary' readline prompt (the
-    #   one passed to readline()), use the values we have already expanded.
-    #   If not, use what's already in rl_display_prompt.  WRAP_OFFSET is the
-    #   number of non-visible characters in the prompt string.
+    # If the prompt to be displayed is the `primary' readline prompt (the one
+    # passed to readline()), use the values we have already expanded.  If not,
+    # use what's already in rl_display_prompt.  WRAP_OFFSET is the number of
+    # non-visible characters in the prompt string.
     if @rl_display_prompt == @rl_prompt || @local_prompt
       if @local_prompt_prefix && @forced_display
         _rl_output_some_chars(@local_prompt_prefix, 0,
@@ -3593,44 +3593,25 @@ module PrReadline # :nodoc:
           @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
           lpos = 0
         end
+      elsif @rl_byte_oriented
+        line[out, 1] = c
+        out += 1
+        lpos += 1
+
+        if lpos >= @_rl_screenwidth
+          @inv_lbreaks[newlines += 1] = out
+          @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
+          lpos = 0
+        end
       else
-        if @rl_byte_oriented
-          line[out, 1] = c
-          out += 1
-          lpos += 1
+        _rl_wrapped_multicolumn = 0
 
-          if lpos >= @_rl_screenwidth
-            @inv_lbreaks[newlines += 1] = out
-            @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
-            lpos = 0
-          end
-        else
-          _rl_wrapped_multicolumn = 0
-
-          if @_rl_screenwidth < lpos + wc_width
-            (lpos...@_rl_screenwidth).each do
-              # The space will be removed in update_line()
-              line[out, 1] = ' '
-              out += 1
-              _rl_wrapped_multicolumn += 1
-              lpos += 1
-              next if lpos < @_rl_screenwidth
-
-              @inv_lbreaks[newlines += 1] = out
-              @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
-              lpos = 0
-            end
-          end
-
-          if _in == @rl_point
-            @cpos_buffer_position = out
-            lb_linenum = newlines
-          end
-
-          line[out, wc_bytes] = @rl_line_buffer[_in, wc_bytes]
-          out += wc_bytes
-
-          (0...wc_width).each do
+        if @_rl_screenwidth < lpos + wc_width
+          (lpos...@_rl_screenwidth).each do
+            # The space will be removed in update_line()
+            line[out, 1] = ' '
+            out += 1
+            _rl_wrapped_multicolumn += 1
             lpos += 1
             next if lpos < @_rl_screenwidth
 
@@ -3638,6 +3619,23 @@ module PrReadline # :nodoc:
             @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
             lpos = 0
           end
+        end
+
+        if _in == @rl_point
+          @cpos_buffer_position = out
+          lb_linenum = newlines
+        end
+
+        line[out, wc_bytes] = @rl_line_buffer[_in, wc_bytes]
+        out += wc_bytes
+
+        (0...wc_width).each do
+          lpos += 1
+          next if lpos < @_rl_screenwidth
+
+          @inv_lbreaks[newlines += 1] = out
+          @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
+          lpos = 0
         end
       end
 
@@ -4204,37 +4202,38 @@ module PrReadline # :nodoc:
   # Process just-read character C according to isearch context CXT.  Return
   #   -1 if the caller should just free the context and return, 0 if we should
   #   break out of the loop, and 1 if we should continue to read characters.
-  def _rl_isearch_dispatch(cxt, c)
+  def _rl_isearch_dispatch(cxt, char)
     f = nil
 
-    if c.is_a?(Integer) && c.negative?
+    if char.is_a?(Integer) && char.negative?
       cxt.sflags |= SF_FAILED
       cxt.history_pos = cxt.last_found_line
       return -1
     end
 
     # Translate the keys we do something with to opcodes.
-    if c && @_rl_keymap[c]
-      f = @_rl_keymap[c]
+    if char && @_rl_keymap[char]
+      f = @_rl_keymap[char]
+
       if f == :rl_reverse_search_history
         cxt.lastc = (cxt.sflags & SF_REVERSE).zero? ? -2 : -1
       elsif f == :rl_forward_search_history
         cxt.lastc = (cxt.sflags & SF_REVERSE).zero? ? -1 : -2
       elsif f == :rl_rubout
         cxt.lastc = -3
-      elsif c == "\C-G"
+      elsif char == "\C-G"
         cxt.lastc = -4
-      elsif c == "\C-W" # XXX
+      elsif char == "\C-W" # XXX
         cxt.lastc = -5
-      elsif c == "\C-Y" # XXX
+      elsif char == "\C-Y" # XXX
         cxt.lastc = -6
       end
     end
 
     # The characters in isearch_terminators (set from the user-settable
-    #   variable isearch-terminators) are used to terminate the search but
-    #   not subsequently execute the character as a command.  The default
-    #   value is "\033\012" (ESC and C-J).
+    # variable isearch-terminators) are used to terminate the search but not
+    # subsequently execute the character as a command.  The default value is
+    # "\033\012" (ESC and C-J).
     if cxt.lastc.instance_of?(String) &&
        cxt.search_terminators.include?(cxt.lastc)
       # ESC still terminates the search, but if there is pending input or if
@@ -4390,7 +4389,8 @@ module PrReadline # :nodoc:
       limit = cxt.sline_len - cxt.search_string_index + 1
       # Search the current line.
 
-      while (cxt.sflags & SF_REVERSE).zero? ? (cxt.sline_index < limit) : (cxt.sline_index >= 0)
+      while (cxt.sflags & SF_REVERSE).zero? \
+            ? (cxt.sline_index < limit) : (cxt.sline_index >= 0)
         if cxt.search_string[0, cxt.search_string_index] ==
            cxt.sline[cxt.sline_index, cxt.search_string_index]
           cxt.sflags |= SF_FOUND
@@ -4411,7 +4411,8 @@ module PrReadline # :nodoc:
         cxt.history_pos += cxt.direction
 
         # At limit for direction?
-        if (cxt.sflags & SF_REVERSE).zero? ? (cxt.history_pos == cxt.hlen) : (cxt.history_pos.negative?)
+        if (cxt.sflags & SF_REVERSE).zero? \
+            ? (cxt.history_pos == cxt.hlen) : (cxt.history_pos.negative?)
           cxt.sflags |= SF_FAILED
           break
         end
@@ -4427,7 +4428,11 @@ module PrReadline # :nodoc:
       break if (cxt.sflags & SF_FAILED) != 0
 
       # Now set up the line for searching...
-      cxt.sline_index = (cxt.sflags & SF_REVERSE).zero? ? 0 : (cxt.sline_len - cxt.search_string_index)
+      cxt.sline_index = if (cxt.sflags & SF_REVERSE).zero?
+                          0
+                        else
+                          cxt.sline_len - cxt.search_string_index
+                        end
     end
 
     if (cxt.sflags & SF_FAILED) != 0
@@ -4444,8 +4449,10 @@ module PrReadline # :nodoc:
       rl_replace_line(cxt.lines[cxt.history_pos], false)
       @rl_point = cxt.sline_index
       cxt.last_found_line = cxt.history_pos
+
+      where = (cxt.history_pos == cxt.save_line) ? -1 : cxt.history_pos
       rl_display_search(cxt.search_string, (cxt.sflags & SF_REVERSE) != 0,
-                        (cxt.history_pos == cxt.save_line) ? -1 : cxt.history_pos)
+                        where)
     end
 
     1
@@ -4499,19 +4506,19 @@ module PrReadline # :nodoc:
     rl_clear_message
   end
 
-  def _rl_isearch_cleanup(cxt, r)
-    _rl_isearch_fini(cxt) if r >= 0
+  def _rl_isearch_cleanup(cxt, action)
+    _rl_isearch_fini(cxt) if action >= 0
 
     @_rl_iscxt = nil
 
     rl_unsetstate(RL_STATE_ISEARCH)
 
-    r != 0
+    action != 0
   end
 
   # Do the command associated with KEY in MAP.
-  #   If the associated command is really a keymap, then read
-  #   another key, and dispatch into that map.
+  # If the associated command is really a keymap, then read another key, and
+  # dispatch into that map.
   def _rl_dispatch(key, map)
     @_rl_dispatching_keymap = map
     _rl_dispatch_subseq(key, map, false)
@@ -4654,20 +4661,21 @@ module PrReadline # :nodoc:
     @pending_count = 0
     @pending_key = nil
 
-    begin
-      case `chcp`.scan(/\d+$/).first.to_i
-      when 936, 949, 950, 51_932, 51_936, 50_225
-        @encoding = 'E'
-      when 932, 50_220, 50_221, 20_222
-        @encoding = 'S'
-      when 65_001
-        @encoding = 'U'
-      else
-        @encoding = 'N'
+    @encoding =
+      begin
+        case `chcp`.scan(/\d+$/).first.to_i
+        when 936, 949, 950, 51_932, 51_936, 50_225
+          'E'
+        when 932, 50_220, 50_221, 20_222
+          'S'
+        when 65_001
+          'U'
+        else
+          'N'
+        end
+      rescue StandardError
+        'N'
       end
-    rescue
-      @encoding = 'N'
-    end
 
     def rl_getc(_stream)
       while @kbhit.Call.zero?
@@ -5849,9 +5857,7 @@ module PrReadline # :nodoc:
         rl_end_undo_group
       end
 
-      while @_rl_undo_group_level.positive?
-        rl_end_undo_group
-      end
+      rl_end_undo_group while @_rl_undo_group_level.positive?
 
       @vi_continued_command = 0
     end
@@ -5985,7 +5991,7 @@ module PrReadline # :nodoc:
 
   # Rubout the character behind point.
   def rl_rubout(count, key)
-    return (rl_delete(-count, key)) if count.negative?
+    return rl_delete(-count, key) if count.negative?
 
     if @rl_point.zero?
       rl_ding
@@ -6079,26 +6085,23 @@ module PrReadline # :nodoc:
     # First, find the slot to work with.
     if @_rl_last_command_was_kill
       slot = @rl_kill_ring_length - 1
+    elsif @rl_kill_ring.nil? # Get a new slot?
+      # If we don't have any defined, then make one.
+      @rl_kill_ring_length = 1
+      @rl_kill_ring = Array.new(@rl_kill_ring_length + 1)
+      @rl_kill_ring[slot = 0] = nil
     else
-      # Get a new slot.
-      if @rl_kill_ring.nil?
-        # If we don't have any defined, then make one.
-        @rl_kill_ring_length = 1
-        @rl_kill_ring = Array.new(@rl_kill_ring_length + 1)
-        @rl_kill_ring[slot = 0] = nil
+      # We have to add a new slot on the end, unless we have exceeded the
+      #   max limit for remembering kills.
+      slot = @rl_kill_ring_length
+
+      if slot == @rl_max_kills
+        @rl_kill_ring[0, slot] = @rl_kill_ring[1, slot]
       else
-        # We have to add a new slot on the end, unless we have exceeded the
-        #   max limit for remembering kills.
-        slot = @rl_kill_ring_length
-
-        if slot == @rl_max_kills
-          @rl_kill_ring[0, slot] = @rl_kill_ring[1, slot]
-        else
-          slot = @rl_kill_ring_length += 1
-        end
-
-        @rl_kill_ring[slot -= 1] = nil
+        slot = @rl_kill_ring_length += 1
       end
+
+      @rl_kill_ring[slot -= 1] = nil
     end
 
     # If the last command was a kill, prepend or append.
@@ -6259,7 +6262,8 @@ module PrReadline # :nodoc:
     if @rl_explicit_arg
       @rl_comment_len = @rl_comment_text.length
 
-      if @rl_comment_text[0, @rl_comment_len] == @rl_line_buffer[0, @rl_comment_len]
+      if @rl_comment_text[0, @rl_comment_len] ==
+         @rl_line_buffer[0, @rl_comment_len]
         rl_delete_text(@rl_point, @rl_point + @rl_comment_len)
       else
         rl_insert_text(@rl_comment_text)
@@ -6391,9 +6395,10 @@ module PrReadline # :nodoc:
           @rl_point = scan + 1
 
           # Shell-like quoting conventions.
-          if quote_char == "'"
+          case quote_char
+          when "'"
             found_quote |= RL_QF_SINGLE_QUOTE
-          elsif quote_char == '"'
+          when '"'
             found_quote |= RL_QF_DOUBLE_QUOTE
           else
             found_quote |= RL_QF_OTHER_QUOTE
@@ -6408,8 +6413,8 @@ module PrReadline # :nodoc:
       #   on which to complete.
 
       while (@rl_point = !@rl_byte_oriented ?
-          _rl_find_prev_mbchar(@rl_line_buffer, @rl_point, MB_FIND_ANY)
-          : (@rl_point - 1)) > 0
+             _rl_find_prev_mbchar(@rl_line_buffer, @rl_point, MB_FIND_ANY)
+             : (@rl_point - 1)) > 0
         scan = @rl_line_buffer[@rl_point, 1]
         next unless brkchars.include?(scan)
 
@@ -6438,7 +6443,7 @@ module PrReadline # :nodoc:
       if @rl_char_is_quoted_p
         isbrk = (found_quote.zero? ||
                  !send(@rl_char_is_quoted_p, @rl_line_buffer, @rl_point)) &&
-                 brkchars.include?(scan)
+                brkchars.include?(scan)
       else
         isbrk = brkchars.include?(scan)
       end
@@ -6446,8 +6451,7 @@ module PrReadline # :nodoc:
       if isbrk
         # If the character that caused the word break was a quoting
         #   character, then remember it as the delimiter.
-        if @rl_basic_quote_characters &&
-           @rl_basic_quote_characters.include?(scan) && (_end - @rl_point) > 1
+        if @rl_basic_quote_characters&.include?(scan) && (_end - @rl_point) > 1
           delimiter = scan
         end
 
@@ -6512,17 +6516,14 @@ module PrReadline # :nodoc:
       nmatch = matches.length
       send(@rl_ignore_some_completions_function, matches)
 
-      if matches.nil? || matches[0].nil?
-        matches = nil
-        return 0
-      else
-        # If we removed some matches, recompute the common prefix.
-        i = matches.length
+      return 0 if matches.nil? || matches[0].nil?
 
-        if i > 1 && i < nmatch
-          t = matches[0]
-          compute_lcd_of_matches(matches, i - 1, t)
-        end
+      # If we removed some matches, recompute the common prefix.
+      i = matches.length
+
+      if i > 1 && i < nmatch
+        t = matches[0]
+        compute_lcd_of_matches(matches, i - 1, t)
       end
     end
 
@@ -6536,8 +6537,8 @@ module PrReadline # :nodoc:
 
     # remove any opening quote character; make_quoted_replacement will add
     #   it back.
-    if qc && qc.length.positive? && point.postitive? &&
-        @rl_line_buffer[point - 1, 1] == qc
+    if qc&.length.positive? && point.postitive? &&
+       @rl_line_buffer[point - 1, 1] == qc
       point -= 1
     end
 
@@ -6558,7 +6559,6 @@ module PrReadline # :nodoc:
       rp = make_quoted_replacement(matches[0], SINGLE_MATCH, qc)
       rl_insert_text(rp)
       rl_insert_text(' ')
-      rp = nil if rp != matches[0]
     end
 
     rl_end_undo_group
@@ -6610,24 +6610,23 @@ module PrReadline # :nodoc:
   def insert_match(match, start, mtype, qc)
     oqc = qc
     replacement = make_quoted_replacement(match, mtype, qc)
+    return unless replacement
 
     # Now insert the match.
-    if replacement
-      # Don't double an opening quote character.
-      if qc && qc.length.positive? && start != 0 &&
-         @rl_line_buffer[start - 1, 1] == qc && replacement[0, 1] == qc
-        start -= 1
 
-        # If make_quoted_replacement changed the quoting character, remove
-        # the opening quote and insert the (fully-quoted) replacement.
-      elsif qc && (qc != oqc) && start != 0 &&
-            @rl_line_buffer[start - 1, 1] == oqc && replacement[0, 1] != oqc
-        start -= 1
-      end
+    # Don't double an opening quote character.
+    if qc&.length.positive? && start != 0 &&
+        @rl_line_buffer[start - 1, 1] == qc && replacement[0, 1] == qc
+      start -= 1
 
-      _rl_replace_text(replacement, start, @rl_point - 1)
-      replacement = nil if replacement != match
+      # If make_quoted_replacement changed the quoting character, remove
+      # the opening quote and insert the (fully-quoted) replacement.
+    elsif qc && qc != oqc && start != 0 &&
+        @rl_line_buffer[start - 1, 1] == oqc && replacement[0, 1] != oqc
+      start -= 1
     end
+
+    _rl_replace_text(replacement, start, @rl_point - 1)
   end
 
   # Return the portion of PATHNAME that should be output when listing possible
@@ -6650,18 +6649,18 @@ module PrReadline # :nodoc:
   def fnprint(to_print)
     printed_len = 0
 
-    case @encoding
-    when 'E'
-      arr = to_print.scan(/./me)
-    when 'S'
-      arr = to_print.scan(/./ms)
-    when 'U'
-      arr = to_print.scan(/./mu)
-    when 'X'
-      arr = to_print.dup.force_encoding(@encoding_name).chars
-    else
-      arr = to_print.scan(/./m)
-    end
+    arr = case @encoding
+          when 'E'
+            to_print.scan(/./me)
+          when 'S'
+            to_print.scan(/./ms)
+          when 'U'
+            to_print.scan(/./mu)
+          when 'X'
+            to_print.dup.force_encoding(@encoding_name).chars
+          else
+            to_print.scan(/./m)
+          end
 
     arr.each do |s|
       if ctrl_char(s)
@@ -6740,6 +6739,14 @@ module PrReadline # :nodoc:
       # passed.  In this case, we try to expand the directory name before
       # checking for the stat character.
       if to_print != full_pathname
+        s = File.expand_path(full_pathname)
+
+        if @rl_visible_stats
+          extension_char = stat_char(s)
+        else
+          extension_char = '/' if path_isdir(s)
+        end
+      else
         dn = if full_pathname.nil? || full_pathname.empty?
                '/'
              else
@@ -6766,19 +6773,7 @@ module PrReadline # :nodoc:
         else
           extension_char = '/' if path_isdir(new_full_pathname)
         end
-
-        new_full_pathname = nil
-      else
-        s = File.expand_path(full_pathname)
-
-        if @rl_visible_stats
-          extension_char = stat_char(s)
-        else
-          extension_char = '/' if path_isdir(s)
-        end
       end
-
-      s = nil
 
       if extension_char
         @rl_outstream.write(extension_char)
@@ -6798,9 +6793,14 @@ module PrReadline # :nodoc:
 
       return 1 if c == 'y' || c == 'Y' || c == ' '
       return 0 if c == 'n' || c == 'N' || c == RUBOUT
-      _rl_abort_internal if c == ABORT_CHAR || (c.is_a?(Integer) && c < 0)
+
+      if c == ABORT_CHAR || (c.is_a?(Integer) && c.negative?)
+        _rl_abort_internal
+      end
+
       return 2 if for_pager && (c == NEWLINE || c == RETURN)
       return 0 if for_pager && (c == 'q' || c == 'Q')
+
       rl_ding
     end
   end
@@ -6995,7 +6995,7 @@ module PrReadline # :nodoc:
         if what_to_do == '!'
           display_matches(matches)
         elsif what_to_do == '@'
-          display_matches(matches) if !nontrivial_lcd
+          display_matches(matches) unless nontrivial_lcd
         elsif @rl_editing_mode != @vi_mode
           rl_ding # There are other matches remaining.
         end
@@ -7019,8 +7019,6 @@ module PrReadline # :nodoc:
     if saved_line_buffer
       @completion_changed_buffer =
         @rl_line_buffer.delete(NUL_CHAR) != saved_line_buffer
-
-      saved_line_buffer = nil
     end
 
     rl_unsetstate(RL_STATE_COMPLETING)
@@ -7057,7 +7055,7 @@ module PrReadline # :nodoc:
     end
   end
 
-  def rl_replace_from_history(entry, flags)
+  def rl_replace_from_history(entry, _flags)
     # Can't call with `1' because rl_undo_list might point to an undo list
     #   from a history entry, just like we're setting up here.
     rl_replace_line(entry.line, false)
@@ -7075,7 +7073,7 @@ module PrReadline # :nodoc:
   #   element is returned to you so you can free the line, data,
   #   and containing structure.
   def remove_history(which)
-    if which.negative? < 0 || which >= @history_length ||
+    if which.negative? || which >= @history_length ||
        @history_length.zero? || @the_history.nil?
       return nil
     end
@@ -7094,7 +7092,7 @@ module PrReadline # :nodoc:
   end
 
   def release_sigint
-    return if !@sigint_blocked
+    return unless @sigint_blocked
 
     Signal.trap('INT', @sigint_proc)
     @sigint_blocked = false
@@ -7119,7 +7117,7 @@ module PrReadline # :nodoc:
       h = Hash[*`stty -a`.scan(/(\w+) = ([^;]+);/).flatten]
     end
 
-    h.each do |k, v|
+    h.each do |_k, v|
       v.gsub!(/\^(.)/) do
         ($1[0].ord ^ ((?a..?z).include?($1[0]) ? 0x60 : 0x40)).chr
       end
@@ -7196,7 +7194,7 @@ module PrReadline # :nodoc:
   #   systems.
   def rl_tty_unset_default_bindings(kmap)
     # Don't bother before we've saved the tty special chars at least once.
-    return if !rl_isstate(RL_STATE_TTYCSAVED)
+    return unless rl_isstate(RL_STATE_TTYCSAVED)
 
     kmap[@_rl_tty_chars.t_erase] = :rl_insert
     kmap[@_rl_tty_chars.t_kill] = :rl_insert
@@ -7301,7 +7299,7 @@ module PrReadline # :nodoc:
   # Kill backwards to the start of the line.  If DIRECTION is negative, kill
   #   forwards to the line end instead.
   def rl_backward_kill_line(direction, ignore)
-    return (rl_kill_line(1, ignore)) if direction.negative?
+    return rl_kill_line(1, ignore) if direction.negative?
 
     if @rl_point.zero?
       rl_ding
@@ -7369,7 +7367,7 @@ module PrReadline # :nodoc:
 
   def _rl_scxt_alloc(type, flags)
     cxt = Struct.new(:type, :sflags, :search_string, :search_string_index,
-                     :search_string_size, :lines,:allocated_line, :hlen,
+                     :search_string_size, :lines, :allocated_line, :hlen,
                      :hindex, :save_point, :save_mark, :save_line,
                      :last_found_line, :prev_line_found, :save_undo_list,
                      :history_pos, :direction, :lastc, :sline, :sline_len,
@@ -7587,7 +7585,7 @@ module PrReadline # :nodoc:
   # all, and if you aren't, then you know what you are doing.
   def rl_unix_line_discard(_count, _key)
     if @rl_point.zero?
-      rl_ding()
+      rl_ding
     else
       rl_kill_text(@rl_point, 0)
       @rl_point = 0
@@ -7598,11 +7596,12 @@ module PrReadline # :nodoc:
   end
 
   # Yank back the last killed text.  This ignores arguments.
-  def rl_yank(count, ignore)
+  def rl_yank(_count, _ignore)
     if @rl_kill_ring.nil?
-      _rl_abort_internal()
+      _rl_abort_internal
       return -1
     end
+
     _rl_set_mark_at_pos(@rl_point)
     rl_insert_text(@rl_kill_ring[@rl_kill_index])
     0
@@ -7612,66 +7611,68 @@ module PrReadline # :nodoc:
   #   before point is identical to the current kill item, then
   #   delete that text from the line, rotate the index down, and
   #   yank back some other text.
-  def rl_yank_pop(count, key)
-    if (((@rl_last_func != :rl_yank_pop) && (@rl_last_func != :rl_yank)) ||
-        @rl_kill_ring.nil?)
-      _rl_abort_internal()
+  def rl_yank_pop(_count, _key)
+    if (@rl_last_func != :rl_yank_pop && @rl_last_func != :rl_yank) ||
+       @rl_kill_ring.nil?
+      _rl_abort_internal
       return -1
     end
 
     l = @rl_kill_ring[@rl_kill_index].length
     n = @rl_point - l
-    if (n >= 0 && @rl_line_buffer[n,l] == @rl_kill_ring[@rl_kill_index][0,l])
+
+    if (n >= 0 && @rl_line_buffer[n, l] == @rl_kill_ring[@rl_kill_index][0, l])
       rl_delete_text(n, @rl_point)
       @rl_point = n
-      @rl_kill_index-=1
-      if (@rl_kill_index < 0)
-        @rl_kill_index = @rl_kill_ring_length - 1
-      end
+      @rl_kill_index -= 1
+      @rl_kill_index = @rl_kill_ring_length - 1 if @rl_kill_index.negative?
       rl_yank(1, 0)
-      return 0
+      0
     else
-      _rl_abort_internal()
-      return -1
+      _rl_abort_internal
+      -1
     end
   end
 
   # Yank the COUNTh argument from the previous history line, skipping
   #   HISTORY_SKIP lines before looking for the `previous line'.
   def rl_yank_nth_arg_internal(count, ignore, history_skip)
-    pos = where_history()
-    if (history_skip>0)
-      history_skip.times { previous_history() }
+    pos = where_history
+
+    if history_skip.positive?
+      history_skip.times { previous_history }
     end
-    entry = previous_history()
+
+    entry = previous_history
     history_set_pos(pos)
+
     if entry.nil?
-      rl_ding()
+      rl_ding
       return -1
     end
 
     arg = history_arg_extract(count, count, entry.line)
-    if (arg.nil? || arg=='')
-      rl_ding()
+
+    if arg.nil? || arg == ''
+      rl_ding
       arg = nil
       return -1
     end
 
-    rl_begin_undo_group()
+    rl_begin_undo_group
 
     _rl_set_mark_at_pos(@rl_point)
 
     # Vi mode always inserts a space before yanking the argument, and it
     #   inserts it right *after* rl_point.
-    if (@rl_editing_mode == @vi_mode)
+    if @rl_editing_mode == @vi_mode
       rl_vi_append_mode(1, ignore)
-      rl_insert_text(" ")
+      rl_insert_text(' ')
     end
 
     rl_insert_text(arg)
-    arg = nil
-    rl_end_undo_group()
-    return 0
+    rl_end_undo_group
+    0
   end
 
   # Yank the COUNTth argument from the previous history line.
@@ -7689,25 +7690,19 @@ module PrReadline # :nodoc:
   @undo_needed = false
 
   def rl_yank_last_arg(count, key)
-    if (@rl_last_func != :rl_yank_last_arg)
+    if @rl_last_func == :rl_yank_last_arg
+      rl_do_undo if @undo_needed
+      @direction = -@direction if count < 1
+      @history_skip += @direction
+      @history_skip = 0 if @history_skip.negative?
+    else
       @history_skip = 0
       @explicit_arg_p = @rl_explicit_arg
       @count_passed = count
       @direction = 1
-    else
-      if (@undo_needed)
-        rl_do_undo()
-      end
-      if (count < 1)
-        @direction = -@direction
-      end
-      @history_skip += @direction
-      if (@history_skip < 0)
-        @history_skip = 0
-      end
     end
 
-    if (@explicit_arg_p)
+    if @explicit_arg_p
       retval = rl_yank_nth_arg_internal(@count_passed, key, @history_skip)
     else
       retval = rl_yank_nth_arg_internal('$', key, @history_skip)
@@ -7717,29 +7712,37 @@ module PrReadline # :nodoc:
   end
 
   def history_arg_extract(first, last, string)
-    if first != "$" || last != "$"
-      fail "PrReadline.history_arg_extract called with currently unsupported args."
+    if first != '$' || last != '$'
+      raise 'PrReadline.history_arg_extract called with currently unsupported args.'
     end
 
     # Find the last index of an unescaped quote character.
     last_unescaped_quote_char = -1
+
     PrReadline::HISTORY_QUOTE_CHARACTERS.each_char do |quote_char|
       quote_char = Regexp.escape(quote_char)
+
       if index = string =~ /(?:\\.|[^#{quote_char}\\])#{quote_char} *$/
         last_unescaped_quote_char = index if index > last_unescaped_quote_char
       end
     end
+
     last_unescaped_quote_char += 1 # Because of the regex used above.
 
     # Find the last index of an unescaped word delimiter.
-    delimiters = PrReadline::HISTORY_WORD_DELIMITERS.chars.to_a.map { |d| Regexp.escape(d) }
+    delimiters = PrReadline::HISTORY_WORD_DELIMITERS.chars.to_a.map do |d|
+      Regexp.escape(d)
+    end
+
     unless last_unescaped_delimiter = string =~ /(?:\\.|[^#{delimiters.join}])+? *$/
       last_unescaped_delimiter = 0
     end
 
     if last_unescaped_quote_char >= last_unescaped_delimiter
-      quoted_arg = _extract_last_quote(string, string[last_unescaped_quote_char,1])
+      quoted_arg =
+        _extract_last_quote(string, string[last_unescaped_quote_char, 1])
     end
+
     quoted_arg or string[last_unescaped_delimiter...string.length]
   end
 
@@ -7751,28 +7754,39 @@ module PrReadline # :nodoc:
 
   def _rl_char_search_internal(count, dir, smbchar, len)
     pos = @rl_point
-    inc = (dir < 0) ? -1 : 1
-    while (count!=0)
-      if ((dir < 0 && pos <= 0) || (dir > 0 && pos >= @rl_end))
-        rl_ding()
+    inc = dir.negative? ? -1 : 1
+
+    while count != 0
+      if (dir.negative? && pos <= 0) || (dir.positive? && pos >= @rl_end)
+        rl_ding
         return -1
       end
-      pos = (inc > 0) ? _rl_find_next_mbchar(@rl_line_buffer, pos, 1, MB_FIND_ANY) :
-        _rl_find_prev_mbchar(@rl_line_buffer, pos, MB_FIND_ANY)
+
+      pos = if inc.positive?
+              _rl_find_next_mbchar(@rl_line_buffer, pos, 1, MB_FIND_ANY)
+            else
+              _rl_find_prev_mbchar(@rl_line_buffer, pos, MB_FIND_ANY)
+            end
+
       begin
-        if (_rl_is_mbchar_matched(@rl_line_buffer, pos, @rl_end, smbchar, len)!=0)
-          count-=1
-          if (dir < 0)
-            @rl_point = (dir == BTO) ? pos+1 : pos
-          else
-            @rl_point = (dir == FTO) ? pos-1 : pos
-          end
+        if _rl_is_mbchar_matched(@rl_line_buffer, pos,
+                                 @rl_end, smbchar, len) != 0
+          count -= 1
+
+          @rl_point = if dir.negative?
+                        (dir == BTO) ? pos + 1 : pos
+                      else
+                        (dir == FTO) ? pos - 1 : pos
+                      end
+
           break
         end
+
         prepos = pos
       end while ((dir < 0) ? (pos = _rl_find_prev_mbchar(@rl_line_buffer, pos, MB_FIND_ANY)) != prepos :
                  (pos = _rl_find_next_mbchar(@rl_line_buffer, pos, 1, MB_FIND_ANY)) != prepos)
     end
+
     0
   end
 
@@ -7780,29 +7794,28 @@ module PrReadline # :nodoc:
     mbchar = ''
     mb_len = _rl_read_mbchar(mbchar, MB_LEN_MAX)
 
-    if (mbchar.is_a?(Integer) && c < 0) || mbchar == NUL_CHAR
-      return -1
-    end
+    return -1 if (mbchar.is_a?(Integer) && c.negative?) || mbchar == NUL_CHAR
 
-    if (count < 0)
-      return (_rl_char_search_internal(-count, bdir, mbchar, mb_len))
+    if count.negative?
+      _rl_char_search_internal(-count, bdir, mbchar, mb_len)
     else
-      return (_rl_char_search_internal(count, fdir, mbchar, mb_len))
+      _rl_char_search_internal(count, fdir, mbchar, mb_len)
     end
   end
 
-  def rl_char_search(count, key)
+  def rl_char_search(count, _key)
     _rl_char_search(count, FFIND, BFIND)
   end
 
   # Undo the next thing in the list.  Return 0 if there
   #   is nothing to undo, or non-zero if there was.
-  def trans(i)
-    ((i) == -1 ? @rl_point : ((i) == -2 ? @rl_end : (i)))
+  def trans(idx)
+    (idx == -1) ? @rl_point : ((idx == -2) ? @rl_end : idx)
   end
 
-  def rl_do_undo()
+  def rl_do_undo
     start = _end = waiting_for_begin = 0
+
     begin
       return 0 if @rl_undo_list.nil?
 
@@ -7811,12 +7824,12 @@ module PrReadline # :nodoc:
 
       # To better support vi-mode, a start or end value of -1 means
       # rl_point, and a value of -2 means rl_end.
-      if (@rl_undo_list.what == UNDO_DELETE || @rl_undo_list.what == UNDO_INSERT)
+      if @rl_undo_list.what == UNDO_DELETE || @rl_undo_list.what == UNDO_INSERT
         start = trans(@rl_undo_list.start)
         _end = trans(@rl_undo_list.end)
       end
 
-      case (@rl_undo_list.what)
+      case @rl_undo_list.what
         # Undoing deletes means inserting some text.
       when UNDO_DELETE
         @rl_point = start
@@ -7829,13 +7842,13 @@ module PrReadline # :nodoc:
         @rl_point = start
         # Undoing an END means undoing everything 'til we get to a BEGIN.
       when UNDO_END
-        waiting_for_begin+=1
+        waiting_for_begin += 1
         # Undoing a BEGIN means that we are done with this group.
       when UNDO_BEGIN
-        if (waiting_for_begin!=0)
-          waiting_for_begin-=1
+        if waiting_for_begin.zero?
+          rl_ding
         else
-          rl_ding()
+          waiting_for_begin -= 1
         end
       end
 
@@ -7846,99 +7859,85 @@ module PrReadline # :nodoc:
       @rl_undo_list = @rl_undo_list.next
       replace_history_data(-1, release, @rl_undo_list)
       release = nil
-    end while (waiting_for_begin!=0)
+    end while waiting_for_begin != 0
 
     1
   end
 
-
-
   # Do some undoing of things that were done.
-  def rl_undo_command(count, key)
-    if (count < 0)
-      return 0 # Nothing to do.
-    end
-    while (count>0)
-      if (rl_do_undo())
-        count-=1
+  def rl_undo_command(count, _key)
+    return 0 if count.negative? # anything to do?
+
+    while count.positive?
+      if rl_do_undo
+        count -= 1
       else
-        rl_ding()
+        rl_ding
         break
       end
     end
+
     0
   end
 
   # Delete the word at point, saving the text in the kill ring.
   def rl_kill_word(count, key)
-    if (count < 0)
-      return (rl_backward_kill_word(-count, key))
-    else
-      orig_point = @rl_point
-      rl_forward_word(count, key)
+    return rl_backward_kill_word(-count, key) if count.negative?
 
-      if (@rl_point != orig_point)
-        rl_kill_text(orig_point, @rl_point)
-      end
+    orig_point = @rl_point
+    rl_forward_word(count, key)
 
-      @rl_point = orig_point
-      if (@rl_editing_mode == @emacs_mode)
-        @rl_mark = @rl_point
-      end
-    end
+    rl_kill_text(orig_point, @rl_point) if @rl_point != orig_point
+
+    @rl_point = orig_point
+    @rl_mark = @rl_point if @rl_editing_mode == @emacs_mode
+
     0
   end
 
   # Rubout the word before point, placing it on the kill ring.
   def rl_backward_kill_word(count, ignore)
-    if (count < 0)
-      return (rl_kill_word(-count, ignore))
-    else
-      orig_point = @rl_point
-      rl_backward_word(count, ignore)
-      if (@rl_point != orig_point)
-        rl_kill_text(orig_point, @rl_point)
-      end
-      if (@rl_editing_mode == @emacs_mode)
-        @rl_mark = @rl_point
-      end
-    end
+    return rl_kill_word(-count, ignore) if count.negative?
+
+    orig_point = @rl_point
+    rl_backward_word(count, ignore)
+    rl_kill_text(orig_point, @rl_point) if @rl_point != orig_point
+    @rl_mark = @rl_point if @rl_editing_mode == @emacs_mode
+
     0
   end
 
   # Revert the current line to its previous state.
-  def rl_revert_line(count, key)
+  def rl_revert_line(_count, _key)
     if @rl_undo_list.nil?
-      rl_ding()
+      rl_ding
     else
-      while (@rl_undo_list)
-        rl_do_undo()
-      end
-      if (@rl_editing_mode == @vi_mode)
-        @rl_point = @rl_mark = 0      # rl_end should be set correctly
-      end
+      rl_do_undo while @rl_undo_list
+      # rl_end should be set correctly
+      @rl_point = @rl_mark = 0 if @rl_editing_mode == @vi_mode
     end
+
     0
   end
 
-  def rl_backward_char_search(count, key)
+  def rl_backward_char_search(count, _key)
     _rl_char_search(count, BFIND, FFIND)
   end
 
-  def rl_insert_completions(ignore, invoking_key)
+  def rl_insert_completions(_ignore, _invoking_key)
     rl_complete_internal('*')
   end
 
-  def _rl_arg_init()
-    rl_save_prompt()
+  def _rl_arg_init
+    rl_save_prompt
     @_rl_argcxt = 0
     rl_setstate(RL_STATE_NUMERICARG)
   end
 
-  def _rl_arg_getchar()
+  def _rl_arg_getchar
     rl_message("(arg: #{@rl_arg_sign * @rl_numeric_arg}) ")
     rl_setstate(RL_STATE_MOREINPUT)
-    c = rl_read_key()
+    c = rl_read_key
     rl_unsetstate(RL_STATE_MOREINPUT)
     c
   end
@@ -7951,199 +7950,209 @@ module PrReadline # :nodoc:
 
     # If we see a key bound to `universal-argument' after seeing digits,
     #    it ends the argument but is otherwise ignored.
-    if (@_rl_keymap[c] == :rl_universal_argument)
-      if ((cxt & NUM_SAWDIGITS).zero?)
+    if @_rl_keymap[c] == :rl_universal_argument
+      if (cxt & NUM_SAWDIGITS).zero?
         @rl_numeric_arg *= 4
         return 1
-      elsif (rl_isstate(RL_STATE_CALLBACK))
+      elsif rl_isstate(RL_STATE_CALLBACK)
         @_rl_argcxt |= NUM_READONE
         return 0 # XXX
       else
         rl_setstate(RL_STATE_MOREINPUT)
-        key = rl_read_key()
+        key = rl_read_key
         rl_unsetstate(RL_STATE_MOREINPUT)
-        rl_restore_prompt()
-        rl_clear_message()
+        rl_restore_prompt
+        rl_clear_message
         rl_unsetstate(RL_STATE_NUMERICARG)
-        if key.is_a?(Integer) && key < 0
+
+        if key.is_a?(Integer) && key.negative?
           return -1
+        else
+          return _rl_dispatch(key, @_rl_keymap)
         end
-        return (_rl_dispatch(key, @_rl_keymap))
       end
     end
 
-    #c = (c[0].ord & ~0x80).chr
-    r = c[1,1]
-    if (r>='0' && r<='9')
+    # c = (c[0].ord & ~0x80).chr
+    r = c[1, 1]
+
+    if r >= '0' && r <= '9'
       r = r.to_i
-      @rl_numeric_arg = @rl_explicit_arg ? (@rl_numeric_arg * 10) +  r : r
+      @rl_numeric_arg = @rl_explicit_arg ? ((@rl_numeric_arg * 10) + r) : r
       @rl_explicit_arg = 1
       @_rl_argcxt |= NUM_SAWDIGITS
-    elsif (c == '-' && !@rl_explicit_arg)
+    elsif c == '-' && !@rl_explicit_arg
       @rl_numeric_arg = 1
       @_rl_argcxt |= NUM_SAWMINUS
       @rl_arg_sign = -1
     else
       # Make M-- command equivalent to M--1 command.
-      if ((@_rl_argcxt & NUM_SAWMINUS)!=0 && @rl_numeric_arg == 1 && !@rl_explicit_arg)
+      if (@_rl_argcxt & NUM_SAWMINUS) != 0 && @rl_numeric_arg == 1 &&
+         !@rl_explicit_arg
         @rl_explicit_arg = 1
       end
-      rl_restore_prompt()
-      rl_clear_message()
+
+      rl_restore_prompt
+      rl_clear_message
       rl_unsetstate(RL_STATE_NUMERICARG)
 
       r = _rl_dispatch(key, @_rl_keymap)
-      if (rl_isstate(RL_STATE_CALLBACK))
+
+      if rl_isstate(RL_STATE_CALLBACK)
         # At worst, this will cause an extra redisplay.  Otherwise,
         #   we have to wait until the next character comes in.
-        if (!@rl_done)
-          send(@rl_redisplay_function)
-        end
+        send(@rl_redisplay_function) unless @rl_done
         r = 0
       end
+
       return r
     end
+
     1
   end
 
-  def _rl_arg_overflow()
-    if (@rl_numeric_arg > 1000000)
+  def _rl_arg_overflow
+    if @rl_numeric_arg > 1_000_000
       @_rl_argcxt = 0
       @rl_explicit_arg = @rl_numeric_arg = 0
-      rl_ding()
-      rl_restore_prompt()
-      rl_clear_message()
+      rl_ding
+      rl_restore_prompt
+      rl_clear_message
       rl_unsetstate(RL_STATE_NUMERICARG)
       return 1
     end
+
     0
   end
 
   # Handle C-u style numeric args, as well as M--, and M-digits.
-  def rl_digit_loop()
-    while (true)
-      return 1 if _rl_arg_overflow()!=0
-      c = _rl_arg_getchar()
-      if (c >= "\xFE")
-        _rl_abort_internal()
+  def rl_digit_loop
+    loop do
+      return 1 if _rl_arg_overflow != 0
+
+      c = _rl_arg_getchar
+
+      if c >= "\xFE"
+        _rl_abort_internal
         return -1
       end
+
       r = _rl_arg_dispatch(@_rl_argcxt, c)
-      break if (r <= 0 || !rl_isstate(RL_STATE_NUMERICARG))
+      break if r <= 0 || !rl_isstate(RL_STATE_NUMERICARG)
     end
 
-    return r
+    r
   end
 
   # Start a numeric argument with initial value KEY
-  def rl_digit_argument(ignore, key)
-    _rl_arg_init()
-    if (rl_isstate(RL_STATE_CALLBACK))
+  def rl_digit_argument(_ignore, key)
+    _rl_arg_init
+
+    if rl_isstate(RL_STATE_CALLBACK)
       _rl_arg_dispatch(@_rl_argcxt, key)
       rl_message("(arg: #{@rl_arg_sign * @rl_numeric_arg}) ")
-      return 0
+      0
     else
       rl_execute_next(key)
-      return (rl_digit_loop())
+      rl_digit_loop
     end
   end
 
-  # Make C be the next command to be executed.
-  def rl_execute_next(c)
-    @rl_pending_input = c
+  # Make "cmd" be the next command to be executed.
+  def rl_execute_next(cmd)
+    @rl_pending_input = cmd
     rl_setstate(RL_STATE_INPUTPENDING)
     0
   end
 
   # Meta-< goes to the start of the history.
-  def rl_beginning_of_history(count, key)
-    rl_get_previous_history(1 + where_history(), key)
+  def rl_beginning_of_history(_count, key)
+    rl_get_previous_history(1 + where_history, key)
   end
 
   # Meta-> goes to the end of the history.  (The current line).
-  def rl_end_of_history(count, key)
-    rl_maybe_replace_line()
-    using_history()
-    rl_maybe_unsave_line()
+  def rl_end_of_history(_count, _key)
+    rl_maybe_replace_line
+    using_history
+    rl_maybe_unsave_line
     0
   end
 
   # Uppercase the word at point.
-  def rl_upcase_word(count, key)
+  def rl_upcase_word(count, _key)
     rl_change_case(count, UpCase)
   end
 
   # Lowercase the word at point.
-  def rl_downcase_word(count, key)
+  def rl_downcase_word(count, _key)
     rl_change_case(count, DownCase)
   end
 
   # Upcase the first letter, downcase the rest.
-  def rl_capitalize_word(count, key)
+  def rl_capitalize_word(count, _key)
     rl_change_case(count, CapCase)
   end
 
   # Save an undo entry for the text from START to END.
+  # TODO: replace _end with a real variable name
   def rl_modifying(start, _end)
-    if (start > _end)
-      start,_end = _end,start
-    end
+    start, _end = _end, start if start > _end
 
-    if (start != _end)
+    if start != _end
       temp = rl_copy_text(start, _end)
-      rl_begin_undo_group()
+      rl_begin_undo_group
       rl_add_undo(UNDO_DELETE, start, _end, temp)
       rl_add_undo(UNDO_INSERT, start, _end, nil)
-      rl_end_undo_group()
+      rl_end_undo_group
     end
+
     0
   end
 
   # The meaty function.
-  #   Change the case of COUNT words, performing OP on them.
-  #   OP is one of UpCase, DownCase, or CapCase.
-  #   If a negative argument is given, leave point where it started,
-  #   otherwise, leave it where it moves to.
+  #   Change the case of COUNT words, performing OP on them.  OP is one of
+  #   UpCase, DownCase, or CapCase.  If a negative argument is given, leave
+  #   point where it started, otherwise, leave it where it moves to.
   def rl_change_case(count, op)
     start = @rl_point
     rl_forward_word(count, 0)
     _end = @rl_point
 
-    if (op != UpCase && op != DownCase && op != CapCase)
-      rl_ding()
+    if op != UpCase && op != DownCase && op != CapCase
+      rl_ding
       return -1
     end
 
-    if (count < 0)
-      start,_end = _end,start
-    end
+    start, _end = _end, start if count.negative?
 
     # We are going to modify some text, so let's prepare to undo it.
     rl_modifying(start, _end)
 
     inword = false
-    while (start < _end)
+    while start < _end
       c = _rl_char_value(@rl_line_buffer, start)
-      #  This assumes that the upper and lower case versions are the same width.
-      if !@rl_byte_oriented
-        _next = _rl_find_next_mbchar(@rl_line_buffer, start, 1, MB_FIND_NONZERO)
-      else
-        _next = start + 1
-      end
+      # This assumes that the upper and lower case versions are the same width.
+      _next =
+        if @rl_byte_oriented
+          start + 1
+        else
+          _rl_find_next_mbchar(@rl_line_buffer, start, 1, MB_FIND_NONZERO)
+        end
 
-      if (!_rl_walphabetic(c))
+      unless _rl_walphabetic(c)
         inword = false
         start = _next
         next
       end
 
-      if (op == CapCase)
+      if op == CapCase
         nop = inword ? DownCase : UpCase
         inword = true
       else
         nop = op
       end
-      if (isascii(c))
+
+      if isascii(c)
         nc = (nop == UpCase) ? c.upcase : c.downcase
         @rl_line_buffer[start] = nc
       end
@@ -8155,9 +8164,9 @@ module PrReadline # :nodoc:
     0
   end
 
-  def isascii(c)
-    int_val = c[0].to_i # 1.8 + 1.9 compat.
-    return (int_val < 128 && int_val > 0)
+  def isascii(char)
+    int_val = char[0].to_i # 1.8 + 1.9 compat.
+    int_val < 128 && int_val.positive?
   end
 
   # Search non-interactively through the history list.  DIR < 0 means to
@@ -8167,22 +8176,20 @@ module PrReadline # :nodoc:
   #   the search string; if not specified (0), it defaults to `:'.
   def noninc_search(dir, pchar)
     cxt = _rl_nsearch_init(dir, pchar)
-    if (rl_isstate(RL_STATE_CALLBACK))
-      return (0)
-    end
+
+    return 0 if rl_isstate(RL_STATE_CALLBACK)
+
     # Read the search string.
     r = 0
-    while (true)
+
+    loop do
       c = _rl_search_getchar(cxt)
-      if (c == NUL_CHAR)
-        break
-      end
+      break if c == NUL_CHAR
+
       r = _rl_nsearch_dispatch(cxt, c)
-      if (r < 0)
-        return 1
-      elsif (r.zero?)
-        break
-      end
+
+      return 1 if r.negative?
+      break if r.zero?
     end
 
     r = _rl_nsearch_dosearch(cxt)
@@ -8191,13 +8198,13 @@ module PrReadline # :nodoc:
 
   # Search forward through the history list for a string.  If the vi-mode
   #   code calls this, KEY will be `?'.
-  def rl_noninc_forward_search(count, key)
+  def rl_noninc_forward_search(_count, key)
     noninc_search(1, (key == '?') ? '?' : nil)
   end
 
   # Reverse search the history list for a string.  If the vi-mode code
   #   calls this, KEY will be `/'.
-  def rl_noninc_reverse_search(count, key)
+  def rl_noninc_reverse_search(_count, key)
     noninc_search(-1, (key == '/') ? '/' : nil)
   end
 
@@ -8207,24 +8214,23 @@ module PrReadline # :nodoc:
   def make_history_line_current(entry)
     _rl_replace_text(entry.line, 0, @rl_end)
     _rl_fix_point(1)
-    if (@rl_editing_mode == @vi_mode)
+
+    if @rl_editing_mode == @vi_mode
       # POSIX.2 says that the `U' command doesn't affect the copy of any
       #   command lines to the edit line.  We're going to implement that by
       #   making the undo list start after the matching line is copied to the
       #   current editing buffer.
-      rl_free_undo_list()
+      rl_free_undo_list
     end
-    if (@_rl_saved_line_for_history)
-      @_rl_saved_line_for_history = nil
-    end
+
+    @_rl_saved_line_for_history = nil if @_rl_saved_line_for_history
   end
 
   # Make the current history item be the one at POS, an absolute index.
   #   Returns zero if POS is out of range, else non-zero.
   def history_set_pos(pos)
-    if (pos > @history_length || pos < 0 || @the_history.nil?)
-      return (0)
-    end
+    return 0 if pos > @history_length || pos.negative? || @the_history.nil?
+
     @history_offset = pos
     1
   end
@@ -8238,39 +8244,42 @@ module PrReadline # :nodoc:
   #   backwards.  POS is an absolute index into the history list at
   #   which point to begin searching.
   def history_search_pos(string, dir, pos)
-    old = where_history()
+    old = where_history
     history_set_pos(pos)
-    if (history_search(string, dir) == -1)
+
+    if history_search(string, dir) == -1
       history_set_pos(old)
-      return (-1)
+      return -1
     end
-    ret = where_history()
+
+    ret = where_history
     history_set_pos(old)
     ret
   end
 
   # Search the history list for STRING starting at absolute history position
   #   POS.  If STRING begins with `^', the search must match STRING at the
-  #   beginning of a history line, otherwise a full substring match is performed
-  #   for STRING.  DIR < 0 means to search backwards through the history list,
-  #   DIR >= 0 means to search forward.
+  #   beginning of a history line, otherwise a full substring match is
+  #   performed for STRING.  DIR < 0 means to search backwards through the
+  #   history list, DIR >= 0 means to search forward.
   def noninc_search_from_pos(string, pos, dir)
-    return 1 if (pos < 0)
+    return 1 if pos.negative?
 
-    old = where_history()
-    return -1 if (history_set_pos(pos).zero?)
+    old = where_history
+
+    return -1 if history_set_pos(pos).zero?
 
     rl_setstate(RL_STATE_SEARCH)
-    if (string[0,1] == '^')
-      ret = history_search_prefix(string + 1, dir)
-    else
-      ret = history_search(string, dir)
-    end
+
+    ret = if string[0, 1] == '^'
+            history_search_prefix(string + 1, dir)
+          else
+            history_search(string, dir)
+          end
+
     rl_unsetstate(RL_STATE_SEARCH)
 
-    if (ret != -1)
-      ret = where_history()
-    end
+    ret = where_history if ret != -1
     history_set_pos(old)
     ret
   end
@@ -8279,56 +8288,52 @@ module PrReadline # :nodoc:
   #   search is backwards through previous entries, else through subsequent
   #   entries.  Returns 1 if the search was successful, 0 otherwise.
   def noninc_dosearch(string, dir)
-    if (string.nil? || string == '' || @noninc_history_pos < 0)
-      rl_ding()
+    if string.nil? || string == '' || @noninc_history_pos.negative?
+      rl_ding
       return 0
     end
 
     pos = noninc_search_from_pos(string, @noninc_history_pos + dir, dir)
-    if (pos == -1)
+
+    if pos == -1
       # Search failed, current history position unchanged.
-      rl_maybe_unsave_line()
-      rl_clear_message()
+      rl_maybe_unsave_line
+      rl_clear_message
       @rl_point = 0
-      rl_ding()
+      rl_ding
       return 0
     end
 
     @noninc_history_pos = pos
 
-    oldpos = where_history()
+    oldpos = where_history
     history_set_pos(@noninc_history_pos)
-    entry = current_history()
-    if (@rl_editing_mode != @vi_mode)
-      history_set_pos(oldpos)
-    end
+    entry = current_history
+    history_set_pos(oldpos) if @rl_editing_mode != @vi_mode
     make_history_line_current(entry)
     @rl_point = 0
     @rl_mark = @rl_end
-    rl_clear_message()
+    rl_clear_message
     1
   end
 
   def _rl_make_prompt_for_search(pchar)
-    rl_save_prompt()
+    rl_save_prompt
 
     # We've saved the prompt, and can do anything with the various prompt
     #   strings we need before they're restored.  We want the unexpanded
     #   portion of the prompt string after any final newline.
     _p = @rl_prompt ? @rl_prompt.rindex("\n") : nil
+
     if _p.nil?
-      len = (@rl_prompt && @rl_prompt.length>0 ) ? @rl_prompt.length : 0
-      if (len>0)
-        pmt = @rl_prompt.dup
-      else
-        pmt = ''
-      end
-      pmt << pchar
+      len = @rl_prompt&.length.positive? ? @rl_prompt.length : 0
+      pmt = len.positive? ? @rl_prompt.dup : ''
     else
-      _p+=1
-      pmt = @rl_prompt[_p..-1]
-      pmt << pchar
+      _p += 1
+      pmt = @rl_prompt[_p..]
     end
+
+    pmt << pchar
 
     # will be overwritten by expand_prompt, called from rl_message
     @prompt_physical_chars = @saved_physical_chars + 1
@@ -8337,22 +8342,21 @@ module PrReadline # :nodoc:
 
   def _rl_nsearch_init(dir, pchar)
     cxt = _rl_scxt_alloc(RL_SEARCH_NSEARCH, 0)
-    if (dir < 0)
-      cxt.sflags |= SF_REVERSE      # not strictly needed
-    end
+    cxt.sflags |= SF_REVERSE if dir.negative? # not strictly needed
     cxt.direction = dir
     cxt.history_pos = cxt.save_line
-    rl_maybe_save_line()
+    rl_maybe_save_line
+
     # Clear the undo list, since reading the search string should create its
     #   own undo list, and the whole list will end up being freed when we
     #   finish reading the search string.
     @rl_undo_list = nil
 
     # Use the line buffer to read the search string.
-    @rl_line_buffer[0,1] = NUL_CHAR
+    @rl_line_buffer[0, 1] = NUL_CHAR
     @rl_end = @rl_point = 0
 
-    _p = _rl_make_prompt_for_search(pchar ? pchar : ':')
+    _p = _rl_make_prompt_for_search(pchar || ':')
     rl_message(_p)
     _p = nil
 
@@ -8361,19 +8365,18 @@ module PrReadline # :nodoc:
     cxt
   end
 
-  def _rl_nsearch_cleanup(cxt, r)
-    cxt = nil
+  def _rl_nsearch_cleanup(_cxt, r)
     @_rl_nscxt = nil
     rl_unsetstate(RL_STATE_NSEARCH)
     r != 1
   end
 
   def _rl_nsearch_abort(cxt)
-    rl_maybe_unsave_line()
-    rl_clear_message()
+    rl_maybe_unsave_line
+    rl_clear_message
     @rl_point = cxt.save_point
     @rl_mark = cxt.save_mark
-    rl_restore_prompt()
+    rl_restore_prompt
     rl_unsetstate(RL_STATE_NSEARCH)
   end
 
@@ -8381,28 +8384,29 @@ module PrReadline # :nodoc:
   #   if the caller should abort the search, 0 if we should break out of the
   #   loop, and 1 if we should continue to read characters.
   def _rl_nsearch_dispatch(cxt, c)
-    case (c)
+    case c
     when "\C-W"
       rl_unix_word_rubout(1, c)
     when "\C-U"
       rl_unix_line_discard(1, c)
-    when RETURN,NEWLINE
+    when RETURN, NEWLINE
       return 0
-    when "\C-H",RUBOUT
-      if (@rl_point.zero?)
+    when "\C-H", RUBOUT
+      if @rl_point.zero?
         _rl_nsearch_abort(cxt)
         return -1
       end
+
       _rl_rubout_char(1, c)
-    when "\C-C","\C-G"
-      rl_ding()
+    when "\C-C", "\C-G"
+      rl_ding
       _rl_nsearch_abort(cxt)
       return -1
     else
-      if !@rl_byte_oriented
-        rl_insert_text(cxt.mb)
-      else
+      if @rl_byte_oriented
         _rl_insert_char(1, c)
+      else
+        rl_insert_text(cxt.mb)
       end
     end
 
@@ -8420,10 +8424,10 @@ module PrReadline # :nodoc:
     # If rl_point.zero?, we want to re-use the previous search string and
     #   start from the saved history position.  If there's no previous search
     #   string, punt.
-    if (@rl_point.zero?)
+    if @rl_point.zero?
       if @noninc_search_string.nil?
-        rl_ding()
-        rl_restore_prompt()
+        rl_ding
+        rl_restore_prompt
         rl_unsetstate(RL_STATE_NSEARCH)
         return -1
       end
@@ -8433,14 +8437,14 @@ module PrReadline # :nodoc:
       @noninc_search_string = @rl_line_buffer.dup
 
       # If we don't want the subsequent undo list generated by the search
-      #matching a history line to include the contents of the search string,
-      #we need to clear rl_line_buffer here.  For now, we just clear the
-      #undo list generated by reading the search string.  (If the search
-      #fails, the old undo list will be restored by rl_maybe_unsave_line.)
-      rl_free_undo_list()
+      # matching a history line to include the contents of the search string,
+      # we need to clear rl_line_buffer here.  For now, we just clear the
+      # undo list generated by reading the search string.  (If the search
+      # fails, the old undo list will be restored by rl_maybe_unsave_line.)
+      rl_free_undo_list
     end
 
-    rl_restore_prompt()
+    rl_restore_prompt
     noninc_dosearch(@noninc_search_string, cxt.direction)
   end
 
@@ -8449,7 +8453,7 @@ module PrReadline # :nodoc:
   def rl_transpose_words(count, key)
     orig_point = @rl_point
 
-    return if (count.zero?)
+    return if count.zero?
 
     # Find the two words.
     rl_forward_word(count, key)
@@ -8462,8 +8466,8 @@ module PrReadline # :nodoc:
     w1_end = @rl_point
 
     # Do some check to make sure that there really are two words.
-    if ((w1_beg == w2_beg) || (w2_beg < w1_end))
-      rl_ding()
+    if w1_beg == w2_beg || w2_beg < w1_end
+      rl_ding
       @rl_point = orig_point
       return -1
     end
@@ -8474,7 +8478,7 @@ module PrReadline # :nodoc:
 
     # We are about to do many insertions and deletions.  Remember them
     #   as one operation.
-    rl_begin_undo_group()
+    rl_begin_undo_group
 
     # Do the stuff at word2 first, so that we don't have to worry
     #   about word1 moving.
@@ -8491,27 +8495,24 @@ module PrReadline # :nodoc:
     @rl_point = w2_end
 
     # I think that does it.
-    rl_end_undo_group()
-    word1 = nil
-    word2 = nil
+    rl_end_undo_group
 
     0
   end
 
   # Re-read the current keybindings file.
-  def rl_re_read_init_file(count, ignore)
+  def rl_re_read_init_file(_count, _ignore)
     r = rl_read_init_file(nil)
-    rl_set_keymap_from_edit_mode()
+    rl_set_keymap_from_edit_mode
     r
   end
 
   # Exchange the position of mark and point.
-  def rl_exchange_point_and_mark(count, key)
-    if (@rl_mark > @rl_end)
-      @rl_mark = -1
-    end
-    if (@rl_mark == -1)
-      rl_ding()
+  def rl_exchange_point_and_mark(_count, _key)
+    @rl_mark = -1 if @rl_mark > @rl_end
+
+    if @rl_mark == -1
+      rl_ding
       return -1
     else
       @rl_point, @rl_mark = @rl_mark, @rl_point
@@ -8527,14 +8528,12 @@ module PrReadline # :nodoc:
     # How many items of MAX length can we fit in the screen window?
     max += 2
     limit = @_rl_screenwidth / max
-    if (limit != 1 && (limit * max == @_rl_screenwidth))
-      limit-=1
-    end
-    # Avoid a possible floating exception.  If max > _rl_screenwidth,
-    #   limit will be 0 and a divide-by-zero fault will result.
-    if (limit.zero?)
-      limit = 1
-    end
+    limit -= 1 if limit != 1 && (limit * max == @_rl_screenwidth)
+
+    # Avoid a possible floating exception.  If max > _rl_screenwidth, limit
+    #   will be 0 and a divide-by-zero fault will result.
+    limit = 1 if limit.zero?
+
     # How many iterations of the printing loop?
     count = (len + (limit - 1)) / limit
 
@@ -8543,133 +8542,149 @@ module PrReadline # :nodoc:
     #     0 < len <= limit  implies  count = 1.
 
     # Sort the items if they are not already sorted.
-    if (!@rl_ignore_completion_duplicates)
-      matches[1,len] = matches[1,len].sort
-    end
-    rl_crlf()
+    matches[1, len] = matches[1, len].sort if !@rl_ignore_completion_duplicates
+
+    rl_crlf
 
     lines = 0
-    if (!@_rl_print_completions_horizontally)
-      # Print the sorted items, up-and-down alphabetically, like ls.
-      for i in 1 .. count
-        l = i
-        for j in 0 ... limit
-          if (l > len || matches[l].nil?)
-            break
-          else
-            temp = printable_part(matches[l])
-            printed_len = print_filename(temp, matches[l])
 
-            if (j + 1 < limit)
-              @rl_outstream.write(' '*(max - printed_len))
-            end
+    if !@_rl_print_completions_horizontally
+      # Print the sorted items, up-and-down alphabetically, like ls.
+      (1..count).each do |i|
+        l = i
+
+        (0...limit).each do |j|
+          break if l > len || matches[l].nil?
+
+          temp = printable_part(matches[l])
+          printed_len = print_filename(temp, matches[l])
+
+          if (j + 1) < limit
+            @rl_outstream.write(' ' * (max - printed_len))
           end
+
           l += count
         end
-        rl_crlf()
-        lines+=1
-        if (@_rl_page_completions && lines >= (@_rl_screenheight - 1) && i < count)
+
+        rl_crlf
+        lines += 1
+
+        if @_rl_page_completions && lines >= (@_rl_screenheight - 1) &&
+           i < count
           lines = _rl_internal_pager(lines)
-          return if (lines < 0)
+          return if lines.negative?
         end
       end
     else
       # Print the sorted items, across alphabetically, like ls -x.
       i = 1
-      while(matches[i])
+
+      while matches[i]
         temp = printable_part(matches[i])
         printed_len = print_filename(temp, matches[i])
+
         # Have we reached the end of this line?
-        if (matches[i+1])
-          if ((limit > 1) && (i % limit).zero?)
-            rl_crlf()
-            lines+=1
-            if (@_rl_page_completions && lines >= @_rl_screenheight - 1)
+        if matches[i + 1]
+          if limit > 1 && (i % limit).zero?
+            rl_crlf
+            lines += 1
+
+            if @_rl_page_completions && lines >= @_rl_screenheight - 1
               lines = _rl_internal_pager(lines)
-              return if (lines < 0)
+              return if lines.negative?
             end
           else
-            @rl_outstream.write(' '*(max - printed_len))
+            @rl_outstream.write(' ' * (max - printed_len))
           end
         end
+
         i += 1
       end
-      rl_crlf()
+
+      rl_crlf
     end
   end
 
   # Append any necessary closing quote and a separator character to the
-  # just-inserted match.  If the user has specified that directories
-  # should be marked by a trailing `/', append one of those instead.  The
-  # default trailing character is a space.  Returns the number of characters
-  # appended.  If NONTRIVIAL_MATCH is set, we test for a symlink (if the OS
-  # has them) and don't add a suffix for a symlink to a directory.  A
-  # nontrivial match is one that actually adds to the word being completed.
-  # The variable rl_completion_mark_symlink_dirs controls this behavior
-  # (it's initially set to the what the user has chosen, indicated by the
-  # value of _rl_complete_mark_symlink_dirs, but may be modified by an
-  # application's completion function).
+  # just-inserted match.  If the user has specified that directories should be
+  # marked by a trailing `/', append one of those instead.  The default
+  # trailing character is a space.  Returns the number of characters appended.
+  # If NONTRIVIAL_MATCH is set, we test for a symlink (if the OS has them) and
+  # don't add a suffix for a symlink to a directory.  A nontrivial match is
+  # one that actually adds to the word being completed.  The variable
+  # rl_completion_mark_symlink_dirs controls this behavior (it's initially set
+  # to the what the user has chosen, indicated by the value of
+  # _rl_complete_mark_symlink_dirs, but may be modified by an application's
+  # completion function).
   def append_to_match(text, delimiter, quote_char, nontrivial_match)
     temp_string = NUL_CHAR * 4
     temp_string_index = 0
-    if (quote_char && @rl_point>0 && !@rl_completion_suppress_quote &&
-        @rl_line_buffer[@rl_point - 1,1] != quote_char)
+    if quote_char && @rl_point.positive? && !@rl_completion_suppress_quote &&
+       @rl_line_buffer[@rl_point - 1, 1] != quote_char
       temp_string[temp_string_index] = quote_char
       temp_string_index += 1
     end
-    if (delimiter != NUL_CHAR)
+
+    if delimiter != NUL_CHAR
       temp_string[temp_string_index] = delimiter
       temp_string_index += 1
-    elsif (!@rl_completion_suppress_append && @rl_completion_append_character)
+    elsif !@rl_completion_suppress_append && @rl_completion_append_character
       temp_string[temp_string_index] = @rl_completion_append_character
       temp_string_index += 1
     end
+
     temp_string[temp_string_index] = NUL_CHAR
     temp_string_index += 1
 
-    if (@rl_filename_completion_desired)
+    if @rl_filename_completion_desired
       filename = File.expand_path(text)
-      return temp_string_index unless File.exists? filename
+      return temp_string_index unless File.exist?(filename)
 
-      s = (nontrivial_match && !@rl_completion_mark_symlink_dirs) ?
-        File.lstat(filename) : File.stat(filename)
+      s = if nontrivial_match && !@rl_completion_mark_symlink_dirs
+            File.lstat(filename)
+          else
+            File.stat(filename)
+          end
+
       if s.directory?
         if @_rl_complete_mark_directories
           # This is clumsy.  Avoid putting in a double slash if point
           # is at the end of the line and the previous character is a
           # slash.
-          if (@rl_point>0 && @rl_line_buffer[@rl_point,1].zero?.chr && @rl_line_buffer[@rl_point - 1,1] == '/' )
+          if @rl_point.positive? &&
+             @rl_line_buffer[@rl_point, 1] == NUL_CHAR &&
+             @rl_line_buffer[@rl_point - 1, 1] == '/'
             # this comment is here to suppress the following rubocop error:
             #   An error occurred while Lint/EmptyConditionalBody cop was
             #   inspecting ...
-          elsif (@rl_line_buffer[@rl_point,1] != '/')
+          elsif @rl_line_buffer[@rl_point, 1] != '/'
             rl_insert_text('/')
           end
         end
         # Don't add anything if the filename is a symlink and resolves to a
         # directory.
       elsif s.symlink? && File.stat(filename).directory?
-
+        # TODO: nothing to do?
       else
-        if (@rl_point == @rl_end && temp_string_index>0)
+        if @rl_point == @rl_end && temp_string_index.positive?
           rl_insert_text(temp_string)
         end
       end
+
       filename = nil
-    else
-      if (@rl_point == @rl_end && temp_string_index>0)
-        rl_insert_text(temp_string)
-      end
+    elsif @rl_point == @rl_end && temp_string_index.positive?
+      rl_insert_text(temp_string)
     end
+
     temp_string_index
   end
 
   # Stifle the history list, remembering only MAX number of lines.
   def stifle_history(max)
-    max = 0 if (max < 0)
+    max = 0 if max.negative?
 
-    if (@history_length > max)
-      @the_history.slice!(0,(@history_length - max))
+    if @history_length > max
+      @the_history.slice!(0, @history_length - max)
       @history_length = max
     end
 
@@ -8680,20 +8695,20 @@ module PrReadline # :nodoc:
   # Stop stifling the history.  This returns the previous maximum
   #   number of history entries.  The value is positive if the history
   #   was stifled,  negative if it wasn't.
-  def unstifle_history()
-    if (@history_stifled)
+  def unstifle_history
+    if @history_stifled
       @history_stifled = false
-      return (@history_max_entries)
+      @history_max_entries
     else
-      return (-@history_max_entries)
+      -@history_max_entries
     end
   end
 
-  def history_is_stifled()
-    return (@history_stifled)
+  def history_is_stifled
+    @history_stifled
   end
 
-  def clear_history()
+  def clear_history
     @the_history = nil
     @history_offset = @history_length = 0
   end
@@ -8701,55 +8716,45 @@ module PrReadline # :nodoc:
   # Insert COUNT characters from STRING to the output stream at column COL.
   def insert_some_chars(string, count, col)
     if @hConsoleHandle
-      _rl_output_some_chars(string,0,count)
+      _rl_output_some_chars(string, 0, count)
     else
       # DEBUGGING
-      if (@rl_byte_oriented)
-        if (count != col)
-          $stderr.write("readline: debug: insert_some_chars: count (#{count}) != col (#{col})\n");
-        end
+      if @rl_byte_oriented && count != col
+        $stderr.write("readline: debug: insert_some_chars: count (#{count}) != col (#{col})\n")
       end
+
       # If IC is defined, then we do not have to "enter" insert mode.
-      #if (@_rl_term_IC)
+      # if (@_rl_term_IC)
       #   buffer = tgoto(@_rl_term_IC, 0, col)
       #   @_rl_out_stream.write(buffer)
       #   _rl_output_some_chars(string,0,count)
-      #else
-      # If we have to turn on insert-mode, then do so.
-      if (@_rl_term_im)
-        @_rl_out_stream.write(@_rl_term_im)
-      end
-      # If there is a special command for inserting characters, then
-      # use that first to open up the space.
-      if (@_rl_term_ic)
-        @_rl_out_stream.write(@_rl_term_ic * count)
-      end
+      # else
+      #   If we have to turn on insert-mode, then do so.
+      @_rl_out_stream.write(@_rl_term_im) if @_rl_term_im
+
+      # If there is a special command for inserting characters, then use that
+      # first to open up the space.
+      @_rl_out_stream.write(@_rl_term_ic * count) if @_rl_term_ic
 
       # Print the text.
-      _rl_output_some_chars(string,0, count)
+      _rl_output_some_chars(string, 0, count)
 
-      # If there is a string to turn off insert mode, we had best use
-      # it now.
-      if (@_rl_term_ei)
-        @_rl_out_stream.write(@_rl_term_ei)
-      end
-      #end
+      # If there is a string to turn off insert mode, we had best use it now.
+      @_rl_out_stream.write(@_rl_term_ei) if @_rl_term_ei
     end
   end
 
   # Delete COUNT characters from the display line.
   def delete_chars(count)
-    return if (count > @_rl_screenwidth)   # XXX
+    return if count > @_rl_screenwidth # XXX
 
     if @hConsoleHandle.nil?
-      #if (@_rl_term_DC)
+      # if (@_rl_term_DC)
       #   buffer = tgoto(_rl_term_DC, count, count);
       #   @_rl_out_stream.write(buffer * count)
-      #else
-      if (@_rl_term_dc)
-        @_rl_out_stream.write(@_rl_term_dc * count)
-      end
-      #end
+      # else
+      @_rl_out_stream.write(@_rl_term_dc * count) if @_rl_term_dc
+      # end
     end
   end
 
@@ -8759,10 +8764,10 @@ module PrReadline # :nodoc:
   #   if point is invalied (point < 0 || more than string length),
   #   it returns -1
   def _rl_adjust_point(string, point)
-    return -1 if (point < 0)
+    return -1 if point.negative?
 
     length = string.length
-    return -1 if (length < point)
+    return -1 if length < point
 
     pos = 0
 
@@ -8770,27 +8775,30 @@ module PrReadline # :nodoc:
 
     when 'e'
       x = string.scan(/./me)
-      i, len = 0, x.length
+      i = 0
+      len =x.length
 
-      while (pos < point && i < len)
+      while pos < point && i < len
         pos += x[i].length
         i += 1
       end
 
     when 's'
       x = string.scan(/./ms)
-      i, len = 0, x.length
+      i = 0
+      len = x.length
 
-      while (pos < point && i < len)
+      while pos < point && i < len
         pos += x[i].length
         i += 1
       end
 
     when 'u'
       x = string.scan(/./mu)
-      i, len = 0, x.length
+      i = 0
+      len = x.length
 
-      while (pos < point && i < len)
+      while pos < point && i < len
         pos += x[i].length
         i += 1
       end
@@ -8803,7 +8811,7 @@ module PrReadline # :nodoc:
         # count byte size from head
         i = 0
 
-        while (pos < point && i < len)
+        while pos < point && i < len
           pos += str[i].bytesize
           i += 1
         end
@@ -8812,7 +8820,7 @@ module PrReadline # :nodoc:
         pos = str.bytesize
         i = len - 1
 
-        while (pos > point && i >= 0)
+        while pos > point && i >= 0
           pos -= str[i].bytesize
           i -= 1
         end
@@ -8830,59 +8838,53 @@ module PrReadline # :nodoc:
   #   If flags is MB_FIND_NONZERO, we look for non-zero-width multibyte
   #   characters.
   def _rl_find_next_mbchar(string, seed, count, flags)
-    if @encoding == 'N'
-      return (seed + count)
-    end
-    seed = 0 if seed < 0
+    return seed + count if @encoding == 'N'
+
+    seed = 0 if seed.negative?
     return seed if count <= 0
 
-    point = seed + _rl_adjust_point(string,seed)
-    if (seed < point)
-      count -= 1
-    end
+    point = seed + _rl_adjust_point(string, seed)
+    count -= 1 if seed < point
 
-    str = (flags == MB_FIND_NONZERO) ? string.sub(/\x00+$/,'') : string
+    str = (flags == MB_FIND_NONZERO) ? string.sub(/\x00+$/, '') : string
 
     case @encoding
     when 'E'
-      point += str[point..-1].scan(/./me)[0,count].to_s.length
+      point += str[point..].scan(/./me)[0, count].to_s.length
     when 'S'
-      point += str[point..-1].scan(/./ms)[0,count].to_s.length
+      point += str[point..].scan(/./ms)[0, count].to_s.length
     when 'U'
-      point += str[point..-1].scan(/./mu)[0,count].to_s.length
+      point += str[point..].scan(/./mu)[0, count].to_s.length
     when 'X'
-      point += str[point..-1].force_encoding(@encoding_name)[0,count].bytesize
+      point += str[point..].force_encoding(@encoding_name)[0, count].bytesize
     else
       point += count
       point = str.length if point >= str.length
     end
+
     point
   end
 
   # Find previous character started byte point of the specified seed.
   #   Returned point will be point <= seed.  If flags is MB_FIND_NONZERO,
   #   we look for non-zero-width multibyte characters.
-  def _rl_find_prev_mbchar(string, seed, flags)
-    if @encoding == 'N'
-      return ((seed.zero?) ? seed : seed - 1)
-    end
+  def _rl_find_prev_mbchar(string, seed, _flags)
+    return seed.zero? ? seed : seed - 1 if @encoding == 'N'
+    return 0 if seed.negative?
 
     length = string.length
-    if seed < 0
-      return 0
-    elsif length < seed
-      return length
-    end
+
+    return length if length < seed
 
     case @encoding
     when 'E'
-      string[0,seed].scan(/./me)[0..-2].to_s.length
+      string[0, seed].scan(/./me)[0..-2].to_s.length
     when 'S'
-      string[0,seed].scan(/./ms)[0..-2].to_s.length
+      string[0, seed].scan(/./ms)[0..-2].to_s.length
     when 'U'
-      string[0,seed].scan(/./mu)[0..-2].to_s.length
+      string[0, seed].scan(/./mu)[0..-2].to_s.length
     when 'X'
-      string[0,seed].force_encoding(@encoding_name)[0..-2].bytesize
+      string[0, seed].force_encoding(@encoding_name)[0..-2].bytesize
     end
   end
 
@@ -8890,15 +8892,17 @@ module PrReadline # :nodoc:
   #   return true. Otherwise return false.
   def _rl_compare_chars(buf1, pos1, buf2, pos2)
     return false if buf1[pos1].nil? || buf2[pos2].nil?
+
     case @encoding
     when 'E'
-      buf1[pos1..-1].scan(/./me)[0] == buf2[pos2..-1].scan(/./me)[0]
+      buf1[pos1..].scan(/./me)[0] == buf2[pos2..].scan(/./me)[0]
     when 'S'
-      buf1[pos1..-1].scan(/./ms)[0] == buf2[pos2..-1].scan(/./ms)[0]
+      buf1[pos1..].scan(/./ms)[0] == buf2[pos2..].scan(/./ms)[0]
     when 'U'
-      buf1[pos1..-1].scan(/./mu)[0] == buf2[pos2..-1].scan(/./mu)[0]
+      buf1[pos1..].scan(/./mu)[0] == buf2[pos2..].scan(/./mu)[0]
     when 'X'
-      buf1[pos1..-1].force_encoding(@encoding_name)[0] == buf2[pos2..-1].force_encoding(@encoding_name)[0]
+      buf1[pos1..].force_encoding(@encoding_name)[0] ==
+        buf2[pos2..].force_encoding(@encoding_name)[0]
     else
       buf1[pos1] == buf2[pos2]
     end
@@ -8910,7 +8914,7 @@ module PrReadline # :nodoc:
   # if an invalid multibyte sequence was encountered. It returns (size_t)(-2)
   # if it couldn't parse a complete  multibyte character.
   def _rl_get_char_len(src)
-    return 0 if src[0,1] == NUL_CHAR || src.empty?
+    return 0 if src[0, 1] == NUL_CHAR || src.empty?
 
     case @encoding
     when 'E'
@@ -8931,15 +8935,17 @@ module PrReadline # :nodoc:
   # read multibyte char
   def _rl_read_mbchar(mbchar, size)
     mb_len = 0
-    while (mb_len < size)
+
+    while mb_len < size
       rl_setstate(RL_STATE_MOREINPUT)
-      c = rl_read_key()
+      c = rl_read_key
       rl_unsetstate(RL_STATE_MOREINPUT)
 
-      break if c.is_a?(Integer) && c < 0
+      break if c.is_a?(Integer) && c.negative?
 
       mbchar << c
       mb_len += 1
+
       case @encoding
       when 'E'
         break unless mbchar.scan(/./me).empty?
@@ -8951,6 +8957,7 @@ module PrReadline # :nodoc:
         break if mbchar.dup.force_encoding(@encoding_name).valid_encoding?
       end
     end
+
     mb_len
   end
 
@@ -8960,29 +8967,27 @@ module PrReadline # :nodoc:
   #   to _rl_read_mbchar.
   def _rl_read_mbstring(first, mb, mlen)
     c = first
+
     (0...mlen).each do
       mb << c
-      if _rl_get_char_len(mb) == -2
-        # Read more for multibyte character
-        rl_setstate(RL_STATE_MOREINPUT)
-        c = rl_read_key()
-        break if c.is_a?(Integer) && c < 0
-        rl_unsetstate(RL_STATE_MOREINPUT)
-      else
-        break
-      end
+
+      break unless _rl_get_char_len(mb) == -2
+
+      # Read more for multibyte character
+      rl_setstate(RL_STATE_MOREINPUT)
+      c = rl_read_key
+      break if c.is_a?(Integer) && c.negative?
+
+      rl_unsetstate(RL_STATE_MOREINPUT)
     end
+
     c
   end
 
   def _rl_is_mbchar_matched(string, seed, _end, mbchar, length)
-    return 0 if ((_end - seed) < length)
+    return 0 if (_end - seed) < length
 
-    for i in 0 ... length
-      if (string[seed + i] != mbchar[i])
-        return 0
-      end
-    end
+    (0...length).each { |i| return 0 if string[seed + i] != mbchar[i] }
     1
   end
 
@@ -8991,22 +8996,25 @@ module PrReadline # :nodoc:
   # line to draw the prompt on.
   def redraw_prompt(t)
     oldp = @rl_display_prompt
-    rl_save_prompt()
+    rl_save_prompt
 
     @rl_display_prompt = t
-    @local_prompt,@prompt_visible_length,@prompt_last_invisible,@prompt_invis_chars_first_line,@prompt_physical_chars =
+
+    @local_prompt, @prompt_visible_length, @prompt_last_invisible,
+    @prompt_invis_chars_first_line, @prompt_physical_chars =
       expand_prompt(t)
+
     @local_prompt_prefix = nil
     @local_prompt_len = @local_prompt ? @local_prompt.length : 0
 
-    rl_forced_update_display()
+    rl_forced_update_display
 
     @rl_display_prompt = oldp
-    rl_restore_prompt()
+    rl_restore_prompt
   end
 
   # Redisplay the current line after a SIGWINCH is received.
-  def _rl_redisplay_after_sigwinch()
+  def _rl_redisplay_after_sigwinch
     # Clear the current line and put the cursor at column 0.  Make sure
     #   the right thing happens if we have wrapped to a new screen line.
     if @_rl_term_cr
@@ -9019,61 +9027,74 @@ module PrReadline # :nodoc:
         @rl_outstream.write(@_rl_term_cr)
       end
 
-      if @_rl_last_v_pos > 0
-        _rl_move_vert(0)
-      end
+      _rl_move_vert(0) if @_rl_last_v_pos.positive?
     else
-      rl_crlf()
+      rl_crlf
     end
 
     # Redraw only the last line of a multi-line prompt.
     t = @rl_display_prompt.index("\n")
+
     if t
-      redraw_prompt(@rl_display_prompt[(t+1)..-1])
+      redraw_prompt(@rl_display_prompt[(t + 1)..])
     else
-      rl_forced_update_display()
+      rl_forced_update_display
     end
   end
 
-  def rl_resize_terminal()
-    if @readline_echoing_p
-      _rl_get_screen_size(@rl_instream.fileno, 1)
-      if @rl_redisplay_function != :rl_redisplay
-        rl_forced_update_display()
-      else
-        _rl_redisplay_after_sigwinch()
-      end
+  def rl_resize_terminal
+    return unless @readline_echoing_p
+
+    _rl_get_screen_size(@rl_instream.fileno, 1)
+
+    if @rl_redisplay_function == :rl_redisplay
+      _rl_redisplay_after_sigwinch
+    else
+      rl_forced_update_display
     end
   end
 
-  def rl_sigwinch_handler(sig)
+  def rl_sigwinch_handler(_sig)
     rl_setstate(RL_STATE_SIGHANDLER)
-    rl_resize_terminal()
+    rl_resize_terminal
     rl_unsetstate(RL_STATE_SIGHANDLER)
   end
 
-
-
   module_function \
+    :history_base,
+    :history_length,
     :rl_attempted_completion_function,
-    :rl_deprep_term_function,
-    :rl_event_hook,
+    :rl_attempted_completion_function=,
     :rl_attempted_completion_over,
+    :rl_attempted_completion_over=,
     :rl_basic_quote_characters,
+    :rl_basic_quote_characters=,
     :rl_basic_word_break_characters,
+    :rl_basic_word_break_characters=,
     :rl_completer_quote_characters,
-    :rl_completer_word_break_characters,:rl_completion_append_character,
-    :rl_filename_quote_characters,:rl_instream,:rl_library_version,:rl_outstream,
+    :rl_completer_quote_characters=,
+    :rl_completer_word_break_characters,
+    :rl_completer_word_break_characters=,
+    :rl_completion_append_character,
+    :rl_completion_append_character=,
+    :rl_deprep_term_function,
+    :rl_deprep_term_function=,
+    :rl_event_hook,
+    :rl_event_hook=,
+    :rl_filename_quote_characters,
+    :rl_filename_quote_characters=,
+    :rl_instream,
+    :rl_instream=,
+    :rl_library_version,
+    :rl_library_version=,
+    :rl_outstream,
+    :rl_outstream=,
+    :rl_point,
     :rl_readline_name,
-    :rl_attempted_completion_function=,:rl_deprep_term_function=,
-    :rl_event_hook=,:rl_attempted_completion_over=,:rl_basic_quote_characters=,
-    :rl_basic_word_break_characters=,:rl_completer_quote_characters=,
-    :rl_completer_word_break_characters=,:rl_completion_append_character=,
-    :rl_filename_quote_characters=,:rl_instream=,:rl_library_version=,:rl_outstream=,
-    :rl_readline_name=,:history_length,:history_base,:rl_point
+    :rl_readline_name=
 
   def no_terminal?
-    term = ENV['TERM']
+    term = ENV.fetch('TERM', nil)
     term.nil? || term == 'dumb' || RUBY_PLATFORM.match?(/mswin|mingw/i)
   end
 
