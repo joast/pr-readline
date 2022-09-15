@@ -10,7 +10,7 @@ file 'Gemfile.lock' => ['pr-readline.gemspec'] do
   puts 'Running "bundle check"...' if verbose
   system('bundle', 'check')
 
-  if $CHILD_STATUS&.exited? && $CHILD_STATUS&.success?
+  unless $CHILD_STATUS&.exited? && $CHILD_STATUS&.success?
     abort '"bundle check" failed'
   end
 
