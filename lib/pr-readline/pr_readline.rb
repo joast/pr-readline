@@ -7658,7 +7658,7 @@ module PrReadline # :nodoc:
               _rl_find_prev_mbchar(@rl_line_buffer, pos, MB_FIND_ANY)
             end
 
-      begin
+      loop do
         if _rl_is_mbchar_matched(@rl_line_buffer, pos,
                                  @rl_end, smbchar, len) != 0
           count -= 1
@@ -7679,7 +7679,9 @@ module PrReadline # :nodoc:
               else
                 _rl_find_next_mbchar(@rl_line_buffer, pos, 1, MB_FIND_ANY)
               end
-      end while pos != prepos
+
+        break if pos == prepos
+      end
     end
 
     0
