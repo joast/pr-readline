@@ -2,9 +2,8 @@
 
 The pr-readline gem was forked from rb-readline (which hasn't had a new
 release in years). It provides a pure Ruby implementation of the GNU readline
-C library, as well as the Readline extension that ships as part of the
-standard library. It has some extensions that have proved useful and several
-fixes missing from rb-readline.
+C library. It has some extensions that have proved useful and several fixes
+missing from rb-readline.
 
 ## Installation
 
