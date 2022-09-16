@@ -45,7 +45,7 @@ Gem::Specification.new do |spec|
   # components, files and paths
   spec.files = %w[CHANGES CODE_OF_CONDUCT.md LICENSE README.md Rakefile
                   pr-readline.gemspec] +
-                  Dir['*/**/*.rb']
+               Dir['*/**/*.rb']
 
   spec.require_path = 'lib'
 

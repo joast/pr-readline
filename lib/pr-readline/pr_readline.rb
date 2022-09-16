@@ -6290,24 +6290,28 @@ module PrReadline # :nodoc:
 
     if @rl_point == _end && quote_char == NUL_CHAR
       # We didn't find an unclosed quoted substring upon which to do
-      #   completion, so use the word break characters to find the substring
-      #   on which to complete.
+      # completion, so use the word break characters to find the substring
+      # on which to complete.
+      loop do
+        @rl_point = if @rl_byte_oriented
+                      @rl_point - 1
+                    else
+                      _rl_find_prev_mbchar(@rl_line_buffer, @rl_point,
+                                           MB_FIND_ANY)
+                    end
 
-      while (@rl_point = !@rl_byte_oriented ?
-             _rl_find_prev_mbchar(@rl_line_buffer, @rl_point, MB_FIND_ANY)
-             : (@rl_point - 1)) > 0
+        break if @rl_point <= 0
+
         scan = @rl_line_buffer[@rl_point, 1]
         next unless brkchars.include?(scan)
 
-        # Call the application-specific function to tell us whether
-        #   this word break character is quoted and should be skipped.
-        if @rl_char_is_quoted_p && found_quote != 0 &&
-           send(@rl_char_is_quoted_p, @rl_line_buffer, @rl_point)
-          next
-        end
+        # Call the application-specific function to tell us whether this word
+        # break character is quoted and should be skipped.
+        next if @rl_char_is_quoted_p && found_quote != 0 &&
+                send(@rl_char_is_quoted_p, @rl_line_buffer, @rl_point)
 
         # Convoluted code, but it avoids an n^2 algorithm with calls to
-        #   char_is_quoted.
+        # char_is_quoted.
         break
       end
     end
@@ -6315,11 +6319,11 @@ module PrReadline # :nodoc:
     # If we are at an unquoted word break, then advance past it.
     scan = @rl_line_buffer[@rl_point, 1]
 
-    # If there is an application-specific function to say whether or not
-    #   a character is quoted and we found a quote character, let that
-    #   function decide whether or not a character is a word break, even
-    #   if it is found in rl_completer_word_break_characters.  Don't bother
-    #   if we're at the end of the line, though.
+    # If there is an application-specific function to say whether or not a
+    # character is quoted and we found a quote character, let that function
+    # decide whether or not a character is a word break, even if it is found
+    # in rl_completer_word_break_characters.  Don't bother if we're at the end
+    # of the line, though.
     if scan != NUL_CHAR
       if @rl_char_is_quoted_p
         isbrk = (found_quote.zero? ||
@@ -6470,7 +6474,7 @@ module PrReadline # :nodoc:
       #   This also checks whether the common prefix of several
       # matches needs to be quoted.
       should_quote = if @rl_filename_quote_characters
-                       !!match[@rl_filename_quote_characters]
+                       !match[@rl_filename_quote_characters].nil?
                      else
                        false
                      end
@@ -6837,7 +6841,7 @@ module PrReadline # :nodoc:
 
     # nontrivial_lcd is set if the common prefix adds something to the word
     #   being completed.
-    nontrivial_lcd = !!(matches && text != matches[0])
+    nontrivial_lcd = !(matches && text != matches[0]).nil?
 
     if matches.nil?
       rl_ding
@@ -7669,8 +7673,13 @@ module PrReadline # :nodoc:
         end
 
         prepos = pos
-      end while ((dir < 0) ? (pos = _rl_find_prev_mbchar(@rl_line_buffer, pos, MB_FIND_ANY)) != prepos :
-                 (pos = _rl_find_next_mbchar(@rl_line_buffer, pos, 1, MB_FIND_ANY)) != prepos)
+
+        pos = if dir.negative?
+                _rl_find_prev_mbchar(@rl_line_buffer, pos, MB_FIND_ANY)
+              else
+                _rl_find_next_mbchar(@rl_line_buffer, pos, 1, MB_FIND_ANY)
+              end
+      end while pos != prepos
     end
 
     0
