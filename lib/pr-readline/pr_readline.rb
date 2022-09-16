@@ -19,7 +19,6 @@
 # rubocop:disable Metrics/ParameterLists
 # rubocop:disable Metrics/PerceivedComplexity
 # rubocop:disable Naming/VariableName
-# rubocop:disable Lint/UnderscorePrefixedVariableName # TODO: fix most of these
 
 require_relative 'version'
 
@@ -1105,6 +1104,8 @@ module PrReadline # :nodoc:
   @if_stack = []
   @if_stack_depth = 0
 
+  @currently_reading_init_file = false
+
   # The last key bindings file read.
   @last_readline_init_file = nil
 
@@ -2185,7 +2186,7 @@ module PrReadline # :nodoc:
     @currently_reading_init_file = true
 
     # Loop over the lines in the file.  Lines that start with `#' are
-    #   comments; all other lines are commands for readline initialization.
+    # comments; all other lines are commands for readline initialization.
     @current_readline_init_lineno = 1
 
     buffer.each_line do |line|
@@ -2193,6 +2194,7 @@ module PrReadline # :nodoc:
       rl_parse_and_bind(line) unless line.empty? || line.match?(/^#/)
     end
 
+    @currently_reading_init_file = false
     0
   end
 
@@ -2241,21 +2243,32 @@ module PrReadline # :nodoc:
     0
   end
 
+  def _rl_init_file_error(fmt, *args)
+    $stderr.print 'readline: '
+
+    if @currently_reading_init_file
+      $stderr.printf('%s: line %d: ', @current_readline_init_file,
+                     @current_readline_init_lineno)
+    end
+
+    format(fmt, *args)
+    print "\n"
+    $stderr.flush
+  end
+
   # Invert the current parser state if there is anything on the stack.
   def parser_else(_args)
     if @if_stack.empty?
-      # _rl_init_file_error ("$else found without matching $if")
-      return 0
+      _rl_init_file_error('$else found without matching $if')
+      return
     end
 
     # Check the previous (n) levels of the stack to make sure that we haven't
-    #   previously turned off parsing.
-    return 0 if @if_stack.detect { |x| x }
+    # previously turned off parsing.
+    return if @if_stack.detect { |x| x }
 
     # Invert the state of parsing if at top level.
     @_rl_parsing_conditionalized_out = !@_rl_parsing_conditionalized_out
-
-    0
   end
 
   # Terminate a conditional, popping the value of
@@ -2263,8 +2276,8 @@ module PrReadline # :nodoc:
   def parser_endif(_args)
     if @if_stack.length.positive?
       @_rl_parsing_conditionalized_out = @if_stack.pop
-    else # rubocop:disable Style/EmptyElse TODO: fix?
-      # _rl_init_file_error ("$endif without matching $if")
+    else
+      _rl_init_file_error('$endif without matching $if')
     end
 
     0
@@ -2310,7 +2323,7 @@ module PrReadline # :nodoc:
       0
 
     else
-      # a_rl_init_file_error("unknown parser directive")
+      _rl_init_file_error('unknown parser directive')
       1
     end
   end
@@ -3257,7 +3270,7 @@ module PrReadline # :nodoc:
   def rl_redisplay
     return unless @readline_echoing_p
 
-    _rl_wrapped_multicolumn = 0
+    rl_wrapped_multicolumn = 0
 
     @rl_display_prompt ||= ''
 
@@ -3450,13 +3463,12 @@ module PrReadline # :nodoc:
     @prompt_last_screen_line = newlines
 
     # Draw the rest of the line (after the prompt) into invisible_line,
-    #   keeping track of where the cursor is (cpos_buffer_position), the
-    #   number of the line containing the cursor (lb_linenum), the last line
-    #   number (inv_botlin).  It maintains an array of line breaks for display
-    #   (inv_lbreaks).  This handles expanding tabs for display and displaying
-    #   meta characters.
+    # keeping track of where the cursor is (cpos_buffer_position), the number
+    # of the line containing the cursor (lb_linenum), the last line number
+    # (inv_botlin).  It maintains an array of line breaks for display
+    # (inv_lbreaks).  This handles expanding tabs for display and displaying
+    # meta characters.
     lb_linenum = 0
-    _in = 0
 
     if !@rl_byte_oriented && @rl_end.positive?
       case @encoding
@@ -3477,11 +3489,13 @@ module PrReadline # :nodoc:
       wc_bytes = 1
     end
 
-    while _in < @rl_end
-      c = @rl_line_buffer[_in, 1]
+    idx = 0
+
+    while idx < @rl_end
+      c = @rl_line_buffer[idx, 1]
 
       if c == NUL_CHAR
-        @rl_end = _in
+        @rl_end = idx
         break
       end
 
@@ -3514,7 +3528,7 @@ module PrReadline # :nodoc:
         line = @invisible_line
       end
 
-      if _in == @rl_point
+      if idx == @rl_point
         @cpos_buffer_position = out
         lb_linenum = newlines
       end
@@ -3552,7 +3566,7 @@ module PrReadline # :nodoc:
 
         if lpos >= @_rl_screenwidth
           @inv_lbreaks[newlines += 1] = out
-          @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
+          @_rl_wrapped_line[newlines] = rl_wrapped_multicolumn
           lpos = 0
         end
 
@@ -3563,7 +3577,7 @@ module PrReadline # :nodoc:
 
         if lpos >= @_rl_screenwidth
           @inv_lbreaks[newlines += 1] = out
-          @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
+          @_rl_wrapped_line[newlines] = rl_wrapped_multicolumn
           lpos = 0
         end
       elsif @rl_byte_oriented
@@ -3573,33 +3587,33 @@ module PrReadline # :nodoc:
 
         if lpos >= @_rl_screenwidth
           @inv_lbreaks[newlines += 1] = out
-          @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
+          @_rl_wrapped_line[newlines] = rl_wrapped_multicolumn
           lpos = 0
         end
       else
-        _rl_wrapped_multicolumn = 0
+        rl_wrapped_multicolumn = 0
 
         if @_rl_screenwidth < lpos + wc_width
           (lpos...@_rl_screenwidth).each do
             # The space will be removed in update_line()
             line[out, 1] = ' '
             out += 1
-            _rl_wrapped_multicolumn += 1
+            rl_wrapped_multicolumn += 1
             lpos += 1
             next if lpos < @_rl_screenwidth
 
             @inv_lbreaks[newlines += 1] = out
-            @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
+            @_rl_wrapped_line[newlines] = rl_wrapped_multicolumn
             lpos = 0
           end
         end
 
-        if _in == @rl_point
+        if idx == @rl_point
           @cpos_buffer_position = out
           lb_linenum = newlines
         end
 
-        line[out, wc_bytes] = @rl_line_buffer[_in, wc_bytes]
+        line[out, wc_bytes] = @rl_line_buffer[idx, wc_bytes]
         out += wc_bytes
 
         (0...wc_width).each do
@@ -3607,28 +3621,28 @@ module PrReadline # :nodoc:
           next if lpos < @_rl_screenwidth
 
           @inv_lbreaks[newlines += 1] = out
-          @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
+          @_rl_wrapped_line[newlines] = rl_wrapped_multicolumn
           lpos = 0
         end
       end
 
       if @rl_byte_oriented
-        _in += 1
+        idx += 1
       else
-        _in += wc_bytes
+        idx += wc_bytes
 
         case @encoding
         when 'E'
-          wc = @rl_line_buffer[_in, @rl_end - _in].scan(/./me)[0]
+          wc = @rl_line_buffer[idx, @rl_end - idx].scan(/./me)[0]
           wc_bytes = wc ? wc.length : 1
         when 'S'
-          wc = @rl_line_buffer[_in, @rl_end - _in].scan(/./ms)[0]
+          wc = @rl_line_buffer[idx, @rl_end - idx].scan(/./ms)[0]
           wc_bytes = wc ? wc.length : 1
         when 'U'
-          wc = @rl_line_buffer[_in, @rl_end - _in].scan(/./mu)[0]
+          wc = @rl_line_buffer[idx, @rl_end - idx].scan(/./mu)[0]
           wc_bytes = wc ? wc.length : 1
         when 'X'
-          wc = @rl_line_buffer[_in, @rl_end - _in].force_encoding(@encoding_name)[0] # rubocop:disable Layout/LineLength
+          wc = @rl_line_buffer[idx, @rl_end - idx].force_encoding(@encoding_name)[0] # rubocop:disable Layout/LineLength
           wc_bytes = wc ? wc.bytesize : 1
         end
       end
@@ -3983,33 +3997,34 @@ module PrReadline # :nodoc:
     expand_prompt(pmt).first
   end
 
-  def _rl_col_width(string, start, _end)
-    return 0 if _end <= start
+  def _rl_col_width(string, start, epos)
+    return 0 if epos <= start
 
     # Find the first occurance of NUL_CHAR, which marks the end of the string.
     # Because newlines are also in the string as NUL_CHARs (they are tracked
-    # seperately), we need to ignore any NUL_CHARs that lie before _end.
-    index = string[_end...string.length].index(NUL_CHAR)
+    # seperately), we need to ignore any NUL_CHARs that lie before epos.
+    index = string[epos...string.length].index(NUL_CHAR)
 
-    str = index ? string[0, index + _end] : string
+    str = index ? string[0, index + epos] : string
     width = 0
 
     case @encoding
     when 'N'
-      return (_end - start)
+      return (epos - start)
     when 'U'
-      str[start..._end].scan(/./mu).each do |s|
+      str[start...epos].scan(/./mu).each do |s|
         width += (s.unpack1('U') >= 0x1000) ? 2 : 1
       end
     when 'S'
-      str[start..._end].scan(/./ms).each { |s| width += s.length }
+      str[start...epos].scan(/./ms).each { |s| width += s.length }
     when 'E'
-      str[start..._end].scan(/./me).each { |s| width += s.length }
+      str[start...epos].scan(/./me).each { |s| width += s.length }
     when 'X'
-      str[start..._end].force_encoding(@encoding_name).codepoints.each do |s|
+      str[start...epos].force_encoding(@encoding_name).codepoints.each do |s|
         width += (s > 0x1000) ? 2 : 1
       end
     end
+
     width
   end
 
@@ -4928,11 +4943,11 @@ module PrReadline # :nodoc:
     l
   end
 
-  def alloc_undo_entry(what, start, _end, text)
+  def alloc_undo_entry(what, start, epos, text)
     temp = Struct.new(:what, :start, :end, :text, :next).new
     temp.what = what
     temp.start = start
-    temp.end = _end
+    temp.end = epos
     temp.text = text
     temp.next = nil
     temp
@@ -4940,8 +4955,8 @@ module PrReadline # :nodoc:
 
   # Remember how to undo something.  Concatenate some undos if that seems
   #   right.
-  def rl_add_undo(what, start, _end, text)
-    temp = alloc_undo_entry(what, start, _end, text)
+  def rl_add_undo(what, start, epos, text)
+    temp = alloc_undo_entry(what, start, epos, text)
     temp.next = @rl_undo_list
     @rl_undo_list = temp
   end
@@ -5014,12 +5029,12 @@ module PrReadline # :nodoc:
     @rl_undo_list = nil
   end
 
-  # Replace the contents of the line buffer between START and END with
-  #   TEXT.  The operation is undoable.  To replace the entire line in an
-  #   undoable mode, use _rl_replace_text(text, 0, rl_end)
-  def _rl_replace_text(text, start, _end)
+  # Replace the contents of the line buffer between START and END with TEXT.
+  # The operation is undoable.  To replace the entire line in an undoable
+  # mode, use _rl_replace_text(text, 0, rl_end)
+  def _rl_replace_text(text, start, epos)
     rl_begin_undo_group
-    rl_delete_text(start, _end + 1)
+    rl_delete_text(start, epos + 1)
     @rl_point = start
     n = rl_insert_text(text)
     rl_end_undo_group
@@ -5076,7 +5091,7 @@ module PrReadline # :nodoc:
     return rl_backward_byte(-count, key) if count.negative?
 
     if count.positive?
-      _end = @rl_point + count
+      epos = @rl_point + count
 
       lend = if @rl_end.positive?
                @rl_end - ((@rl_editing_mode == @vi_mode) ? 1 : 0)
@@ -5084,11 +5099,11 @@ module PrReadline # :nodoc:
                @rl_end
              end
 
-      if _end > lend
+      if epos > lend
         @rl_point = lend
         rl_ding
       else
-        @rl_point = _end
+        @rl_point = epos
       end
     end
 
@@ -5265,49 +5280,51 @@ module PrReadline # :nodoc:
 
       # Like rl_forward_word (), except that we look at the characters just
       # before point.
-      _p = if @rl_byte_oriented
-             @rl_point - 1
-           else
-             _rl_find_prev_mbchar(@rl_line_buffer, @rl_point, MB_FIND_NONZERO)
-           end
+      point = if @rl_byte_oriented
+                @rl_point - 1
+              else
+                _rl_find_prev_mbchar(@rl_line_buffer, @rl_point,
+                                     MB_FIND_NONZERO)
+              end
 
-      c = _rl_char_value(@rl_line_buffer, _p)
+      c = _rl_char_value(@rl_line_buffer, point)
 
       unless _rl_walphabetic(c)
-        @rl_point = _p
+        @rl_point = point
 
         while @rl_point.positive?
-          _p = if @rl_byte_oriented
-                 @rl_point - 1
-               else
-                 _rl_find_prev_mbchar(@rl_line_buffer, @rl_point,
-                                      MB_FIND_NONZERO)
-               end
+          point = if @rl_byte_oriented
+                    @rl_point - 1
+                  else
+                    _rl_find_prev_mbchar(@rl_line_buffer, @rl_point,
+                                         MB_FIND_NONZERO)
+                  end
 
-          c = _rl_char_value(@rl_line_buffer, _p)
+          c = _rl_char_value(@rl_line_buffer, point)
           break if _rl_walphabetic(c)
 
-          @rl_point = _p
+          @rl_point = point
         end
       end
 
       while @rl_point.positive?
-        _p = if @rl_byte_oriented
-               @rl_point - 1
-             else
-               _rl_find_prev_mbchar(@rl_line_buffer, @rl_point,
-                                    MB_FIND_NONZERO)
-             end
+        point = if @rl_byte_oriented
+                  @rl_point - 1
+                else
+                  _rl_find_prev_mbchar(@rl_line_buffer, @rl_point,
+                                       MB_FIND_NONZERO)
+                end
 
-        c = _rl_char_value(@rl_line_buffer, _p)
+        c = _rl_char_value(@rl_line_buffer, point)
 
         break unless _rl_walphabetic(c)
 
-        @rl_point = _p
+        @rl_point = point
       end
 
       count -= 1
     end
+
     0
   end
 
@@ -5677,8 +5694,8 @@ module PrReadline # :nodoc:
     end
 
     start = undo.start
-    _end = undo.end
-    len = _end - start + 1
+    epos = undo.end
+    len = epos - start + 1
     @vi_insert_buffer = @rl_line_buffer[start, len - 1]
   end
 
@@ -6194,7 +6211,7 @@ module PrReadline # :nodoc:
   # rubocop:enable Naming/AccessorMethodName
 
   def _rl_find_completion_word
-    _end = @rl_point
+    epos = @rl_point
     found_quote = 0
     delimiter = NUL_CHAR
     quote_char = NUL_CHAR
@@ -6215,7 +6232,7 @@ module PrReadline # :nodoc:
       scan = 0
       pass_next = false
 
-      while scan < _end
+      while scan < epos
         if @rl_byte_oriented
           scan += 1
         else
@@ -6242,7 +6259,7 @@ module PrReadline # :nodoc:
           if @rl_line_buffer[scan, 1] == quote_char
             # Found matching close.  Abandon this substring.
             quote_char = NUL_CHAR
-            @rl_point = _end
+            @rl_point = epos
           end
         elsif @rl_completer_quote_characters.include?(@rl_line_buffer[scan, 1])
           # Found start of a quoted substring.
@@ -6262,7 +6279,7 @@ module PrReadline # :nodoc:
       end
     end
 
-    if @rl_point == _end && quote_char == NUL_CHAR
+    if @rl_point == epos && quote_char == NUL_CHAR
       # We didn't find an unclosed quoted substring upon which to do
       # completion, so use the word break characters to find the substring
       # on which to complete.
@@ -6310,7 +6327,7 @@ module PrReadline # :nodoc:
       if isbrk
         # If the character that caused the word break was a quoting
         #   character, then remember it as the delimiter.
-        if @rl_basic_quote_characters&.include?(scan) && (_end - @rl_point) > 1
+        if @rl_basic_quote_characters&.include?(scan) && (epos - @rl_point) > 1
           delimiter = scan
         end
 
@@ -6325,7 +6342,7 @@ module PrReadline # :nodoc:
     [quote_char, found_quote != 0, delimiter]
   end
 
-  def gen_completion_matches(text, start, _end, our_func, found_quote,
+  def gen_completion_matches(text, start, epos, our_func, found_quote,
                              quote_char)
     @rl_completion_found_quote = found_quote
     @rl_completion_quote_character = quote_char
@@ -6335,7 +6352,7 @@ module PrReadline # :nodoc:
     #   variable rl_attempted_completion_function.
     if @rl_attempted_completion_function
       matches =
-        Readline.send(@rl_attempted_completion_function, text, start, _end)
+        Readline.send(@rl_attempted_completion_function, text, start, epos)
 
       if matches || @rl_attempted_completion_over
         @rl_attempted_completion_over = false
@@ -6795,7 +6812,7 @@ module PrReadline # :nodoc:
       @rl_completion_entry_function || :rl_filename_completion_function
 
     # We now look backwards for the start of a filename/variable word.
-    _end = @rl_point
+    epos = @rl_point
     found_quote = false
     delimiter = NUL_CHAR
     quote_char = NUL_CHAR
@@ -6807,10 +6824,10 @@ module PrReadline # :nodoc:
     end
 
     start = @rl_point
-    @rl_point = _end
+    @rl_point = epos
 
-    text = rl_copy_text(start, _end)
-    matches = gen_completion_matches(text, start, _end, our_func, found_quote,
+    text = rl_copy_text(start, epos)
+    matches = gen_completion_matches(text, start, epos, our_func, found_quote,
                                      quote_char)
 
     # nontrivial_lcd is set if the common prefix adds something to the word
@@ -7633,8 +7650,7 @@ module PrReadline # :nodoc:
             end
 
       loop do
-        if _rl_is_mbchar_matched(@rl_line_buffer, pos,
-                                 @rl_end, smbchar, len) != 0
+        if _rl_is_mbchar_matched(@rl_line_buffer, pos, @rl_end, smbchar, len)
           count -= 1
 
           @rl_point = if dir.negative?
@@ -7692,7 +7708,7 @@ module PrReadline # :nodoc:
   end
 
   def rl_do_undo
-    start = _end = waiting_for_begin = 0
+    start = epos = waiting_for_begin = 0
 
     loop do # rubocop:disable Metrics/BlockLength
       return 0 if @rl_undo_list.nil?
@@ -7716,7 +7732,7 @@ module PrReadline # :nodoc:
 
         # Undoing inserts means deleting some text.
       when UNDO_INSERT
-        rl_delete_text(start, _end)
+        rl_delete_text(start, epos)
         @rl_point = start
         # Undoing an END means undoing everything 'til we get to a BEGIN.
       when UNDO_END
@@ -7970,16 +7986,15 @@ module PrReadline # :nodoc:
     rl_change_case(count, CapCase)
   end
 
-  # Save an undo entry for the text from START to END.
-  # TODO: replace _end with a real variable name
-  def rl_modifying(start, _end)
-    start, _end = _end, start if start > _end
+  # Save an undo entry for the text from START to END (epos).
+  def rl_modifying(start, epos)
+    start, epos = epos, start if start > epos
 
-    if start != _end
-      temp = rl_copy_text(start, _end)
+    if start != epos
+      temp = rl_copy_text(start, epos)
       rl_begin_undo_group
-      rl_add_undo(UNDO_DELETE, start, _end, temp)
-      rl_add_undo(UNDO_INSERT, start, _end, nil)
+      rl_add_undo(UNDO_DELETE, start, epos, temp)
+      rl_add_undo(UNDO_INSERT, start, epos, nil)
       rl_end_undo_group
     end
 
@@ -7993,32 +8008,34 @@ module PrReadline # :nodoc:
   def rl_change_case(count, operation)
     start = @rl_point
     rl_forward_word(count, 0)
-    _end = @rl_point
+    epos = @rl_point
 
     if operation != UpCase && operation != DownCase && operation != CapCase
       rl_ding
       return -1
     end
 
-    start, _end = _end, start if count.negative?
+    start, epos = epos, start if count.negative?
 
     # We are going to modify some text, so let's prepare to undo it.
-    rl_modifying(start, _end)
+    rl_modifying(start, epos)
 
     inword = false
-    while start < _end
+
+    while start < epos
       c = _rl_char_value(@rl_line_buffer, start)
+
       # This assumes that the upper and lower case versions are the same width.
-      _next =
-        if @rl_byte_oriented
-          start + 1
-        else
-          _rl_find_next_mbchar(@rl_line_buffer, start, 1, MB_FIND_NONZERO)
-        end
+      next_pos = if @rl_byte_oriented
+                   start + 1
+                 else
+                   _rl_find_next_mbchar(@rl_line_buffer, start, 1,
+                                        MB_FIND_NONZERO)
+                 end
 
       unless _rl_walphabetic(c)
         inword = false
-        start = _next
+        start = next_pos
         next
       end
 
@@ -8034,10 +8051,10 @@ module PrReadline # :nodoc:
         @rl_line_buffer[start] = nc
       end
 
-      start = _next
+      start = next_pos
     end
 
-    @rl_point = _end
+    @rl_point = epos
     0
   end
 
@@ -8198,16 +8215,16 @@ module PrReadline # :nodoc:
     rl_save_prompt
 
     # We've saved the prompt, and can do anything with the various prompt
-    #   strings we need before they're restored.  We want the unexpanded
-    #   portion of the prompt string after any final newline.
-    _p = @rl_prompt ? @rl_prompt.rindex("\n") : nil
+    # strings we need before they're restored.  We want the unexpanded portion
+    # of the prompt string after any final newline.
+    point = @rl_prompt ? @rl_prompt.rindex("\n") : nil
 
-    if _p.nil?
+    if point.nil?
       len = (@rl_prompt&.length && length&.positive?) ? @rl_prompt.length : 0
       pmt = len.positive? ? @rl_prompt.dup : ''
     else
-      _p += 1
-      pmt = @rl_prompt[_p..]
+      point += 1
+      pmt = @rl_prompt[point..]
     end
 
     pmt << pchar
@@ -8233,9 +8250,8 @@ module PrReadline # :nodoc:
     @rl_line_buffer[0, 1] = NUL_CHAR
     @rl_end = @rl_point = 0
 
-    _p = _rl_make_prompt_for_search(pchar || ':')
-    rl_message(_p)
-    _p = nil
+    point = _rl_make_prompt_for_search(pchar || ':')
+    rl_message(point)
 
     rl_setstate(RL_STATE_NSEARCH)
     @_rl_nscxt = cxt
@@ -8860,11 +8876,11 @@ module PrReadline # :nodoc:
     c
   end
 
-  def _rl_is_mbchar_matched(string, seed, _end, mbchar, length)
-    return 0 if (_end - seed) < length
+  def _rl_is_mbchar_matched(string, seed, epos, mbchar, length)
+    return false if (epos - seed) < length
 
-    (0...length).each { |i| return 0 if string[seed + i] != mbchar[i] }
-    1
+    (0...length).each { |i| return false if string[seed + i] != mbchar[i] }
+    true
   end
 
   # Redraw the last line of a multi-line prompt that may possibly contain

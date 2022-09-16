@@ -12,6 +12,22 @@ Naming/FileName:
   Exclude:
     - lib/pr-readline.rb
 
+Gemspec/RequireMFA:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 80
+# Max: 120
+
+Layout/LineContinuationLeadingSpace:
+  EnforcedStyle: leading
+
+Style/BlockComments:
+  Enabled: false
+
+Style/FormatStringToken:
+  Enabled: false
+
 Style/StringLiterals:
   Enabled: true
   EnforcedStyle: single_quotes
@@ -19,19 +35,6 @@ Style/StringLiterals:
 Style/StringLiteralsInInterpolation:
   Enabled: true
   EnforcedStyle: double_quotes
-
-Layout/LineLength:
-  Max: 80
-# Max: 120
-
-Gemspec/RequireMFA:
-  Enabled: false
-
-Layout/LineContinuationLeadingSpace:
-  EnforcedStyle: leading
-
-Style/BlockComments:
-  Enabled: false
 
 Style/TernaryParentheses:
   EnforcedStyle: require_parentheses_when_complex
