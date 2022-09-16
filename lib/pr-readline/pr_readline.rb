@@ -800,21 +800,21 @@ module PrReadline # :nodoc:
   # Key sequence `contexts'
   @_rl_kscxt = nil
 
-  # Non-zero means do not parse any lines other than comments and
-  #   parser directives.
+  # Non-zero means do not parse any lines other than comments and parser
+  # directives.
   @_rl_parsing_conditionalized_out = false
 
   # Non-zero means to convert characters with the meta bit set to
-  #   escape-prefixed characters so we can indirect through
-  #   emacs_meta_keymap or vi_escape_keymap.
+  # escape-prefixed characters so we can indirect through emacs_meta_keymap or
+  # vi_escape_keymap.
   @_rl_convert_meta_chars_to_ascii = true
 
-  # Non-zero means to output characters with the meta bit set directly
-  #   rather than as a meta-prefixed escape sequence.
+  # Non-zero means to output characters with the meta bit set directly rather
+  # than as a meta-prefixed escape sequence.
   @_rl_output_meta_chars = false
 
-  # Non-zero means to look at the termios special characters and bind
-  #   them to equivalent readline functions at startup.
+  # Non-zero means to look at the termios special characters and bind them to
+  # equivalent readline functions at startup.
   @_rl_bind_stty_chars = true
 
   @rl_completion_display_matches_hook = nil
@@ -861,8 +861,8 @@ module PrReadline # :nodoc:
   # Non-zero means that this terminal has a meta key.
   @term_has_meta = 0
 
-  # The sequences to write to turn on and off the meta key, if this
-  #   terminal has one.
+  # The sequences to write to turn on and off the meta key, if this terminal
+  # has one.
   @_rl_term_mm = nil
   @_rl_term_mo = nil
 
@@ -3519,32 +3519,7 @@ module PrReadline # :nodoc:
         lb_linenum = newlines
       end
 
-      # TODO: what the hell? why is "false" used in these conditions?!?
-      if false && meta_char(c)
-        if !@_rl_output_meta_chars && false
-          line[out, 4] = format('\\%03o', c.ord)
-
-          if lpos + 4 >= @_rl_screenwidth
-            temp = @_rl_screenwidth - lpos
-            @inv_lbreaks[newlines += 1] = out + temp
-            lpos = 4 - temp
-          else
-            lpos += 4
-          end
-
-          out += 4
-        else
-          line[out, 1] = c
-          out += 1
-          lpos += 1
-
-          if lpos >= @_rl_screenwidth
-            @inv_lbreaks[newlines += 1] = out
-            @_rl_wrapped_line[newlines] = _rl_wrapped_multicolumn
-            lpos = 0
-          end
-        end
-      elsif c == "\t"
+      if c == "\t"
         newout = out + 8 - (lpos % 8) # TODO: correct precedence?
         temp = newout - out
 
@@ -4189,8 +4164,7 @@ module PrReadline # :nodoc:
   end
 
   def endsrch_char(char)
-    (ctrl_char(char) || meta_char(char) || char == RUBOUT) &&
-      char != "\C-G"
+    char != "\C-G" && (ctrl_char(char) || meta_char(char) || char == RUBOUT)
   end
 
   def _rl_input_available
