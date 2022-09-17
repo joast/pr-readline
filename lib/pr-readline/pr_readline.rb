@@ -21,10 +21,10 @@
 # rubocop:disable Naming/VariableName
 
 require_relative 'version'
+require 'strscan'
+require 'etc'
 
 module PrReadline # :nodoc:
-  require 'etc'
-
   NUL_CHAR = 0.chr
 
   RL_LIBRARY_VERSION = '5.2'
@@ -2470,8 +2470,6 @@ module PrReadline # :nodoc:
   end
 
   def rl_translate_keyseq(seq)
-    require 'strscan'
-
     ss = StringScanner.new(seq)
     new_seq = +''
 
@@ -2480,6 +2478,7 @@ module PrReadline # :nodoc:
       next new_seq << char unless char == '\\'
 
       char = ss.getch
+
       new_seq << case char
                  when 'a'
                    "\007"
@@ -2502,7 +2501,7 @@ module PrReadline # :nodoc:
                  when '\\'
                    '\\'
                  when 'x'
-                   ss.scan(/\d\d/).to_i(16).chr
+                   ss.scan(/\h\h/).to_i(16).chr
                  when '0'..'7'
                    ss.pos -= 1
                    ss.scan(/\d\d\d/).to_i(8).chr
