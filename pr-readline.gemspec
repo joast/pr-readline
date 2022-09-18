@@ -38,10 +38,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'etc', '>= 1.0'
   spec.add_dependency 'strscan', '>= 2.0'
 
-  # development dependencies
-  # spec.add_development_dependency 'minitest', '>= 5.2'
-  # spec.add_development_dependency 'rake', '>= 10.0'
-
   # components, files and paths
   spec.files = %w[CHANGES CODE_OF_CONDUCT.md LICENSE README.md Rakefile
                   pr-readline.gemspec] +

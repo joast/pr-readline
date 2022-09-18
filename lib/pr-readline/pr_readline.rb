@@ -234,18 +234,18 @@ module PrReadline # :nodoc:
   #   a line.  This is usually `^'.
   @history_subst_char = '^'
 
-  # During tokenization, if this character is seen as the first character
-  #   of a word, then it, and all subsequent characters upto a newline are
-  #   ignored.  For a Bourne shell, this should be '#'.  Bash special cases
-  #   the interactive comment character to not be a comment delimiter.
+  # During tokenization, if this character is seen as the first character of a
+  # word, then it, and all subsequent characters upto a newline are ignored.
+  # For a Bourne shell, this should be '#'.  Bash special cases the
+  # interactive comment character to not be a comment delimiter.
   @history_comment_char = NUL_CHAR
 
   # The list of characters which inhibit the expansion of text if found
-  #   immediately following history_expansion_char.
+  # immediately following history_expansion_char.
   @history_no_expand_chars = " \t\n\r="
 
   # If set to a non-zero value, single quotes inhibit history expansion.
-  #   The default is 0.
+  # The default is 0.
   @history_quotes_inhibit_expansion = 0
 
   # Used to split words by history_tokenize_internal.
@@ -676,9 +676,24 @@ module PrReadline # :nodoc:
   # The current insert mode:  input (the default) or overwrite
   @rl_insert_mode = RL_IM_DEFAULT
 
-  # Non-zero if we called this function from _rl_dispatch().  It's present
-  #   so functions can find out whether they were called from a key binding
-  #   or directly from an application.
+  RL_EMACS_MODESTR_DEFAULT = '@'
+  RL_EMACS_MODESTR_DEFLEN = 1
+  @_rl_emacs_mode_str = RL_EMACS_MODESTR_DEFAULT
+  @_rl_emacs_modestr_len = RL_EMACS_MODESTR_DEFLEN
+
+  RL_VI_INS_MODESTR_DEFAULT = '(ins)'
+  RL_VI_INS_MODESTR_DEFLEN = 5
+  @_rl_vi_ins_mode_str = RL_VI_INS_MODESTR_DEFAULT
+  @_rl_vi_ins_modestr_len = RL_VI_INS_MODESTR_DEFLEN
+
+  RL_VI_CMD_MODESTR_DEFAULT = '(cmd)'
+  RL_VI_CMD_MODESTR_DEFLEN = 5
+  @_rl_vi_cmd_mode_str = RL_VI_CMD_MODESTR_DEFAULT
+  @_rl_vi_cmd_modestr_len = RL_VI_CMD_MODESTR_DEFLEN
+
+  # Non-zero if we called this function from _rl_dispatch().  It's present so
+  # functions can find out whether they were called from a key binding or
+  # directly from an application.
   @rl_dispatching = false
 
   # Non-zero if the previous command was a kill command.
@@ -778,7 +793,8 @@ module PrReadline # :nodoc:
   @_rl_bell_preference = AUDIBLE_BELL
 
   # String inserted into the line by rl_insert_comment ().
-  @_rl_comment_begin = nil
+  RL_COMMENT_BEGIN_DEFAULT = '#'
+  @_rl_comment_begin = RL_COMMENT_BEGIN_DEFAULT
 
   # Keymap holding the function currently being executed.
   @rl_executing_keymap = nil
@@ -1194,13 +1210,11 @@ module PrReadline # :nodoc:
         @dirname = @users_dirname.dup
       end
 
-      # rubocop:disable Lint/SuppressedException
-      # TODO: need a better way to handle Dir.new failure
       begin
         @directory = Dir.new(@dirname)
-      rescue Errno::ENOENT, Errno::ENOTDIR, Errno::EACCES
+      rescue SystemCallError
+        # TODO: handle the error
       end
-      # rubocop:enable Lint/SuppressedException
 
       # Now dequote a non-null filename.
       if @filename && !@filename.empty? && @rl_completion_found_quote &&
@@ -2134,30 +2148,30 @@ module PrReadline # :nodoc:
     # TODO: what should this do? anything?
   end
 
-  # Do key bindings from a file.  If FILENAME is NULL it defaults
-  #   to the first non-null filename from this list:
+  # Do key bindings from a file.  If FILENAME is NULL it defaults to the first
+  # non-null filename from this list:
   #     1. the filename used for the previous call
   #     2. the value of the shell variable `INPUTRC'
   #     3. ~/.inputrc
   #     4. /etc/inputrc
-  #   If the file existed and could be opened and read, 0 is returned,
-  #   otherwise errno is returned.
+  # If the file existed and could be opened and read, 0 is returned, otherwise
+  # errno is returned.
   def rl_read_init_file(filename)
     # Default the filename.
     filename ||= @last_readline_init_file
     filename ||= ENV.fetch('INPUTRC', nil)
 
-    if filename.nil? || filename == ''
+    if filename.nil? || filename.empty?
       filename = DEFAULT_INPUTRC
 
       # Try to read DEFAULT_INPUTRC; fall back to SYS_INPUTRC on failure
-      return 0 if _rl_read_init_file(filename, 0).zero?
+      return true if _rl_read_init_file(filename, 0)
 
       filename = SYS_INPUTRC
     end
 
     if RUBY_PLATFORM.match?(/mswin|mingw/i)
-      return 0 if _rl_read_init_file(filename, 0).zero?
+      return true if _rl_read_init_file(filename, 0)
 
       filename = '~/_inputrc'
     end
@@ -2172,11 +2186,14 @@ module PrReadline # :nodoc:
     openname = File.expand_path(filename)
 
     begin
-      buffer = nil
-      File.open(openname) { |file| buffer = file.read }
-    rescue # rubocop:disable Style/RescueStandardError
-      # TODO: should rescue something
-      return -1
+      if File.size(openname) > 1_000_000
+        warn "readline: #{filename}: unreasonably large, ignoring it"
+        return false
+      end
+
+      buffer = File.read(openname, mode: 'rt')
+    rescue SystemCallError
+      return false
     end
 
     if include_level.zero? && filename != @last_readline_init_file
@@ -2187,11 +2204,13 @@ module PrReadline # :nodoc:
 
     # Loop over the lines in the file.  Lines that start with `#' are
     # comments; all other lines are commands for readline initialization.
-    @current_readline_init_lineno = 1
+    @current_readline_init_lineno = 0
 
     buffer.each_line do |line|
+      @current_readline_init_lineno += 1
       line.strip!
-      rl_parse_and_bind(line) unless line.empty? || line.match?(/^#/)
+      next if line.empty? || line[0] == '#'
+      return false unless rl_parse_and_bind(line)
     end
 
     @currently_reading_init_file = false
@@ -2251,9 +2270,10 @@ module PrReadline # :nodoc:
                      @current_readline_init_lineno)
     end
 
-    format(fmt, *args)
+    print format(fmt, *args)
     print "\n"
     $stderr.flush
+    false
   end
 
   # Invert the current parser state if there is anything on the stack.
@@ -2302,117 +2322,343 @@ module PrReadline # :nodoc:
   # Handle a parser directive.  STATEMENT is the line of the directive
   #   without any leading `$'.
   def handle_parser_directive(statement)
-    directive, args = statement.split
+    directive, args = statement.split(nil, 2)
 
     case directive.downcase
 
     when 'if'
       parser_if(args)
-      0
 
     when 'endif'
       parser_endif(args)
-      0
 
     when 'else'
       parser_else(args)
-      0
 
     when 'include'
       parser_include(args)
-      0
 
     else
-      _rl_init_file_error('unknown parser directive')
-      1
+      _rl_init_file_error('%s: unknown parser directive', directive)
     end
   end
 
-  def rl_variable_bind(name, value)
-    case name
-    when 'bind-tty-special-chars'
-      @_rl_bind_stty_chars = value.nil? || value == '1' || value == 'on'
-    when 'blink-matching-paren'
-      @rl_blink_matching_paren = value.nil? || value == '1' || value == 'on'
-    when 'byte-oriented'
-      @rl_byte_oriented = value.nil? || value == '1' || value == 'on'
-    when 'completion-ignore-case'
-      @_rl_completion_case_fold = value.nil? || value == '1' || value == 'on'
-    when 'convert-meta'
-      @_rl_convert_meta_chars_to_ascii =
-        value.nil? || value == '1' || value == 'on'
-    when 'disable-completion'
-      @rl_inhibit_completion = value.nil? || value == '1' || value == 'on'
-    when 'enable-keypad'
-      @_rl_enable_keypad = value.nil? || value == '1' || value == 'on'
-    when 'expand-tilde'
-      @rl_complete_with_tilde_expansion =
-        value.nil? || value == '1' || value == 'on'
-    when 'history-preserve-point'
-      @_rl_history_preserve_point = value.nil? || value == '1' || value == 'on'
-    when 'horizontal-scroll-mode'
-      @_rl_horizontal_scroll_mode = value.nil? || value == '1' || value == 'on'
-    when 'input-meta', 'meta-flag'
-      @_rl_meta_flag = value.nil? || value == '1' || value == 'on'
-    when 'mark-directories'
-      @_rl_complete_mark_directories =
-        value.nil? || value == '1' || value == 'on'
-    when 'mark-modified-lines'
-      @_rl_mark_modified_lines = value.nil? || value == '1' || value == 'on'
-    when 'mark-symlinked-directories'
-      @_rl_complete_mark_symlink_dirs =
-        value.nil? || value == '1' || value == 'on'
-    when 'match-hidden-files'
-      @_rl_match_hidden_files = value.nil? || value == '1' || value == 'on'
-    when 'output-meta'
-      @_rl_output_meta_chars = value.nil? || value == '1' || value == 'on'
-    when 'page-completions'
-      @_rl_page_completions = value.nil? || value == '1' || value == 'on'
-    when 'prefer-visible-bell'
-      @_rl_prefer_visible_bell = value.nil? || value == '1' || value == 'on'
-    when 'print-completions-horizontally'
-      @_rl_print_completions_horizontally =
-        value.nil? || value == '1' || value == 'on'
-    when 'show-all-if-ambiguous'
-      @_rl_complete_show_all = value.nil? || value == '1' || value == 'on'
-    when 'show-all-if-unmodified'
-      @_rl_complete_show_unmodified =
-        value.nil? || value == '1' || value == 'on'
-    when 'visible-stats'
-      @rl_visible_stats = value.nil? || value == '1' || value == 'on'
-    when 'bell-style'
-      @_rl_bell_preference = case value
-                             when 'none', 'off'
-                               NO_BELL
-                             when 'visible'
-                               VISIBLE_BELL
-                             else # 'audible', 'on'
-                               AUDIBLE_BELL
-                             end
-    when 'comment-begin'
-      @_rl_comment_begin = value.dup
-    when 'completion-query-items'
-      @rl_completion_query_items = value.to_i
-    when 'editing-mode'
-      case value
-      when 'vi'
-        # This is a NOOP until the rest of Vi-mode is working.
-      when 'emacs'
-        @_rl_keymap = @emacs_standard_keymap
-        @rl_editing_mode = @emacs_mode
-      end
-    when 'isearch-terminators'
-      @_rl_isearch_terminators = instance_eval(value)
-    when 'keymap'
-      case value
-      when 'emacs', 'emacs-standard', 'emacs-meta', 'emacs-ctlx'
-        @_rl_keymap = @emacs_standard_keymap
-      when 'vi', 'vi-move', 'vi-command'
-        # This is a NOOP until the rest of Vi-mode is working.
-      when 'vi-insert'
-        # This is a NOOP until the rest of Vi-mode is working.
-      end
+  def sv_bell_style(value)
+    case value
+    when nil, '', 'audible', 'on'
+      @_rl_bell_preference = AUDIBLE_BELL
+    when 'none', 'off'
+      @_rl_bell_preference = NO_BELL
+    when 'visible'
+      @_rl_bell_preference = VISIBLE_BELL
+    else
+      return false
     end
+
+    true
+  end
+
+  def gv_bell_style(_name)
+    case @_rl_bell_preference
+    when NO_BELL
+      'none'
+    when VISIBLE_BELL
+      'visible'
+    else # AUDIBLE_BELL or anything else (which would be a bug...)
+      'audible'
+    end
+  end
+
+  def sv_combegin(value)
+    return false if value.nil? || value.empty?
+
+    @_rl_comment_begin = value.dup
+    true
+  end
+
+  def gv_combegin(_name)
+    @_rl_comment_begin
+  end
+
+  def sv_compwidth(value)
+    @_rl_completion_columns = if value.nil? || value.empty?
+                                -1
+                              else
+                                Integer(value)
+                              end
+    true
+  rescue ArgumentError
+    false
+  end
+
+  def gv_compwidth(_name)
+    format('%d', @_rl_completion_columns)
+  end
+
+  def sv_dispprefix(value)
+    ival = (value.nil? || value.empty?) ? 0 : Integer(value)
+    @_rl_completion_prefix_display_length = ival.negative? ? 0 : ival
+    true
+  rescue ArgumentError
+    false
+  end
+
+  def gv_dispprefix(_name)
+    format('%d', @_rl_completion_prefix_display_length)
+  end
+
+  def sv_compquery(value)
+    ival = (value.nil? || value.empty?) ? 100 : Integer(value)
+    @rl_completion_query_items = ival.negative? ? 0 : ival
+    true
+  rescue ArgumentError
+    false
+  end
+
+  def gv_compquery(_name)
+    format('%d', @rl_completion_query_items)
+  end
+
+  # rubocop:disable Lint/DuplicateBranch
+  def sv_editmode(value)
+    if value.nil? || value.empty?
+      false
+    elsif value[0, 2] == 'vi'
+      # TODO: complete vi support
+      false
+    elsif value[0, 5] == 'emacs'
+      @_rl_keymap = @emacs_standard_keymap
+      @rl_editing_mode = @emacs_mode
+      true
+    else
+      false
+    end
+  end
+  # rubocop:enable Lint/DuplicateBranch
+
+  def gv_editmode(_name)
+    rl_get_keymap_name_from_edit_mode
+  end
+
+  def sv_emacs_modestr(value)
+    if value.nil?
+      @_rl_emacs_mode_str = nil
+      @_rl_emacs_modestr_len = 0
+    elsif value.empty?
+      @_rl_emacs_mode_str = ''
+      @_rl_emacs_modestr_len = 0
+    else
+      # TODO: finish this
+      # rl_translate_keyseq...
+      # rl_translate_keyseq (value, _rl_emacs_mode_str, &_rl_emacs_modestr_len)
+      # _rl_emacs_mode_str[_rl_emacs_modestr_len] = '\0'
+    end
+
+    true
+  end
+
+  def gv_emacs_modestr(_name)
+    @_rl_emacs_mode_str
+  end
+
+  def sv_histsize(value)
+    ival = (value.nil? || value.empty?) ? 500 : Integer(value)
+    ival.negative? ? unstifle_history(ival) : stifle_history(ival)
+    true
+  rescue ArgumentError
+    false
+  end
+
+  def gv_histsize(_name)
+    format('%d', @history_stifled ? @history_max_entries : 0)
+  end
+
+  def sv_isrchterm(value)
+    return false if value.nil?
+
+    v = if value[0] == '"' || value[0] == '\''
+          # get the quoted string (without the quotes)
+          d = value[0]
+          value =~ /\A#{d}([^#{d}]+)#{d}/
+          Regexp.latest_match(1)
+        else
+          # get everything up to the first white space
+          value.sub(/\s.*\z/, '')
+        end
+
+    # TODO: finish this
+    # rl_translate_keyseq (v + beg, _rl_isearch_terminators, &end)
+
+    true
+  end
+
+  def gv_isrchterm(_name)
+    # TODO: do something
+  end
+
+  def sv_keymap(value)
+    keymap = rl_get_keymap_by_name(value)
+    return false unless keymap
+
+    rl_set_keymap(keymap)
+    true
+  end
+
+  def gv_keymap(_name)
+    rl_get_keymap_name(@_rl_keymap)
+  end
+
+  def sv_seqtimeout(value)
+    ival = (value.nil? || value.empty?) ? 0 : Integer(value)
+    @_rl_keyseq_timeout = ival.negative? ? 0 : ival
+    true
+  rescue ArgumentError
+    false
+  end
+
+  def gv_seqtimeout(_name)
+    format('%d', @_rl_keyseq_timeout)
+  end
+
+  def sv_vicmd_modestr(value)
+    if value.nil?
+      @_rl_vi_cmd_mode_str = nil
+      @_rl_vi_cmd_modestr_len = 0
+    elsif value.empty?
+      @_rl_vi_cmd_mode_str = ''
+      @_rl_vi_cmd_modestr_len = 0
+    else
+      # TODO: finish this
+      # rl_translate_keyseq(value, _rl_vi_cmd_mode_str,
+      #                     &_rl_vi_cmd_modestr_len)
+      # _rl_vi_cmd_mode_str[_rl_vi_cmd_modestr_len] = '\0'
+    end
+  end
+
+  def gv_vicmd_modestr(_name)
+    @_rl_vi_cmd_mode_str
+  end
+
+  def sv_viins_modestr(value)
+    if value.nil?
+      @_rl_vi_ins_mode_str = nil
+      @_rl_vi_ins_modestr_len = 0
+    elsif value.empty?
+      @_rl_vi_ins_mode_str = ''
+      @_rl_vi_ins_modestr_len = 0
+    else
+      # TODO: finish this
+      # rl_translate_keyseq(value, _rl_vi_ins_mode_str,
+      #                     &_rl_vi_ins_modestr_len)
+      # _rl_vi_ins_mode_str[_rl_vi_ins_modestr_len] = '\0';
+    end
+  end
+
+  def gv_viins_modestr(_name)
+    @_rl_vi_ins_mode_str
+  end
+
+  BOOLEAN_VARIABLES = {
+    'bind-tty-special-chars' => '@_rl_bind_stty_chars',
+    'blink-matching-paren' => '@rl_blink_matching_pare',
+    'byte-oriented' => '@rl_byte_oriente',
+    'colored-completion-prefix' => '@_rl_colored_completion_prefi',
+    'colored-stats' => '@_rl_colored_stat',
+    'completion-ignore-case' => '@_rl_completion_case_fol',
+    'completion-map-case' => '@_rl_completion_case_ma',
+    'convert-meta' => '@_rl_convert_meta_chars_to_asci',
+    'disable-completion' => '@rl_inhibit_completio',
+    'echo-control-characters' => '@_rl_echo_control_char',
+    'enable-bracketed-paste' => '@_rl_enable_bracketed_past',
+    'enable-keypad' => '@_rl_enable_keypa',
+    'enable-meta-key' => '@_rl_enable_met',
+    'expand-tilde' => '@rl_complete_with_tilde_expansio',
+    'history-preserve-point' => '@_rl_history_preserve_poin',
+    'horizontal-scroll-mode' => '@_rl_horizontal_scroll_mod',
+    'input-meta' => '@_rl_meta_fla',
+    'mark-directories' => '@_rl_complete_mark_directorie',
+    'mark-modified-lines' => '@_rl_mark_modified_line',
+    'mark-symlinked-directories' => '@_rl_complete_mark_symlink_dir',
+    'match-hidden-files' => '@_rl_match_hidden_file',
+    'menu-complete-display-prefix' => '@_rl_menu_complete_prefix_firs',
+    'meta-flag' => '@_rl_meta_fla',
+    'output-meta' => '@_rl_output_meta_char',
+    'page-completions' => '@_rl_page_completion',
+    'prefer-visible-bell' => '@_rl_prefer_visible_bel',
+    'print-completions-horizontally' => '@_rl_print_completions_horizontall',
+    'revert-all-at-newline' => '@_rl_revert_all_at_newlin',
+    'show-all-if-ambiguous' => '@_rl_complete_show_al',
+    'show-all-if-unmodified' => '@_rl_complete_show_unmodifie',
+    'show-mode-in-prompt' => '@_rl_show_mode_in_promp',
+    'skip-completed-text' => '@_rl_skip_completed_tex',
+    'visible-stats' => '@rl_visible_stats'
+  }.freeze
+
+  STRING_VARIABLES = {
+    'bell-style' => [method(:sv_bell_style), method(:gv_bell_style)],
+    'comment-begin' => [method(:sv_combegin), method(:gv_combegin)],
+    'completion-display-width' => [method(:sv_compwidth),
+                                   method(:gv_compwidth)],
+    'completion-prefix-display-length' =>
+      [method(:sv_dispprefix), method(:gv_dispprefix)],
+    'completion-query-items' => [method(:sv_compquery), method(:gv_compquery)],
+    'editing-mode' => [method(:sv_editmode), method(:gv_editmode)],
+    'emacs-mode-string' => [method(:sv_emacs_modestr),
+                            method(:gv_emacs_modestr)],
+    'history-size' => [method(:sv_histsize), method(:gv_histsize)],
+    'isearch-terminators' => [method(:sv_isrchterm), method(:gv_isrchterm)],
+    'keymap' => [method(:sv_keymap), method(:gv_keymap)],
+    'keyseq-timeout' => [method(:sv_seqtimeout), method(:gv_seqtimeout)],
+    'vi-cmd-mode-string' => [method(:sv_vicmd_modestr),
+                             method(:gv_vicmd_modestr)],
+    'vi-ins-mode-string' => [method(:sv_viins_modestr),
+                             method(:gv_viins_modestr)]
+  }.freeze
+
+  # TODO: This should be returning success/failure
+  def rl_variable_bind(name, value)
+    name = name.downcase
+    value = value.downcase unless value.nil?
+
+    bv = BOOLEAN_VARIABLES[name]
+
+    if bv
+      on_off = value.nil? || value.empty? || value == '1' || value == 'on'
+      if instance_variable_set(bv, on_off) == on_off
+        # Need special handling for:
+        #   blink-matching-paren
+        #   enable-bracketed-paste
+        #   prefer-visible-bell
+        #   show-mode-in-prompt - GNU readline has without SPECIAL attribute?
+        return true
+      end
+
+      _rl_init_file_error('%s: could not set value to \'%s\'', name, value)
+      _rl_init_file_error('%s: %s', name, bv)
+      return false
+    end
+
+    sv = STRING_VARIABLES[name]
+
+    if sv
+      return true if sv[0].call(value)
+
+      _rl_init_file_error('%s: could not set value to \'%s\'', name, value)
+      return false
+    end
+
+    _rl_init_file_error('%s: unknown variable name', name)
+    false
+  end
+
+  def rl_variable_value(name)
+    bv = BOOLEAN_VARIABLES[name]
+    return instance_variable_get(bv) ? 'on' : 'off' if bv
+
+    sv = STRING_VARIABLES[name]
+    return sv[1].call(name, value) if sv
+
+    nil
   end
 
   def rl_named_function(name)
@@ -2526,31 +2772,26 @@ module PrReadline # :nodoc:
   #   A new-style keybinding looks like "\C-x\C-x": exchange-point-and-mark.
   def rl_parse_and_bind(string)
     # If this is a parser directive, act on it.
-    if string[0, 1] == '$'
-      handle_parser_directive(string[1..])
-      return 0
-    end
+    return handle_parser_directive(string[1..]) if string[0, 1] == '$'
 
     # If we aren't supposed to be parsing right now, then we're done.
-    return 0 if @_rl_parsing_conditionalized_out
+    return true if @_rl_parsing_conditionalized_out
 
-    if string.match?(/^set/i)
-      _, var, value = string.downcase.split
-      rl_variable_bind(var, value)
-      return 0
+    # TODO: this is incomplete
+
+    if string.match?(/^set\s/i)
+      _, var, value = string.split(' ', 3)
+      return rl_variable_bind(var, value)
     end
 
     if string =~ /"(.*)"\s*:\s*(.*)$/
-      # rubocop:disable Style/PerlBackrefs
-      # TODO: use ::Regexp.last_match(1)?
-      key = $1
-      funname = $2
-      # rubocop:enable Style/PerlBackrefs
+      key = Regexp.last_match(1)
+      funname = Regexp.last_match(2)
       func = rl_named_function(funname)
       rl_bind_key(key, func) if func
     end
 
-    0
+    true
   end
 
   def _rl_enable_meta_key
@@ -2654,8 +2895,7 @@ module PrReadline # :nodoc:
       @_rl_screenchars -= @_rl_screenheight
     end
 
-    # Override the effect of any `set keymap' assignments in the
-    #   inputrc file.
+    # Override the effect of any `set keymap' assignments in the inputrc file.
     rl_set_keymap_from_edit_mode
 
     # Try to bind a common arrow key prefix, if not already bound.
@@ -2665,7 +2905,8 @@ module PrReadline # :nodoc:
     _rl_enable_meta_key if @_rl_enable_meta
 
     # If the completion parser's default word break characters haven't been
-    #   set yet, then do so now.
+    # set yet, then do so now.
+    #
     # rubocop:disable Naming/MemoizedInstanceVariableName
     # TODO: what does this cop mean?
     @rl_completer_word_break_characters ||= @rl_basic_word_break_characters
@@ -6124,7 +6365,7 @@ module PrReadline # :nodoc:
   #   A K*rn shell style function.
   def rl_insert_comment(_count, key)
     rl_beg_of_line(1, key)
-    @rl_comment_text = @_rl_comment_begin || '#'
+    @rl_comment_text = @_rl_comment_begin || RL_COMMENT_BEGIN_DEFAULT
 
     if @rl_explicit_arg
       @rl_comment_len = @rl_comment_text.length
@@ -6379,14 +6620,14 @@ module PrReadline # :nodoc:
     return 0 if matches.nil?
 
     # It seems to me that in all the cases we handle we would like to ignore
-    #   duplicate possiblilities.  Scan for the text to insert being identical
-    #   to the other completions.
+    # duplicate possiblilities.  Scan for the text to insert being identical
+    # to the other completions.
     remove_duplicate_matches(matches) if @rl_ignore_completion_duplicates
 
     # If we are matching filenames, then here is our chance to do clever
-    #   processing by re-examining the list.  Call the ignore function with
-    #   the array as a parameter.  It can munge the array, deleting matches as
-    #   it desires.
+    # processing by re-examining the list.  Call the ignore function with the
+    # array as a parameter.  It can munge the array, deleting matches as it
+    # desires.
     if @rl_ignore_some_completions_function && matching_filenames
       nmatch = matches.length
       send(@rl_ignore_some_completions_function, matches)
@@ -8583,9 +8824,9 @@ module PrReadline # :nodoc:
     @max_input_history = @history_max_entries = max
   end
 
-  # Stop stifling the history.  This returns the previous maximum
-  #   number of history entries.  The value is positive if the history
-  #   was stifled,  negative if it wasn't.
+  # Stop stifling the history.  This returns the previous maximum number of
+  # history entries.  The value is positive if the history was stifled,
+  # negative if it wasn't.
   def unstifle_history
     if @history_stifled
       @history_stifled = false
@@ -8982,7 +9223,9 @@ module PrReadline # :nodoc:
     :rl_outstream=,
     :rl_point,
     :rl_readline_name,
-    :rl_readline_name=
+    :rl_readline_name=,
+    :rl_variable_bind,
+    :rl_variable_value
 
   def no_terminal?
     term = ENV.fetch('TERM', nil)
