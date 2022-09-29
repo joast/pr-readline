@@ -5,7 +5,7 @@
 # rubocop:disable Metrics/AbcSize
 # rubocop:disable Layout/LineLength
 
-require 'minitest/autorun'
+require_relative 'test_helper'
 require 'pr-readline'
 
 class TestPrReadline < Minitest::Test # :nodoc:

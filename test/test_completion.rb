@@ -5,7 +5,7 @@
 # rubocop:disable Metrics/MethodLength
 # rubocop:disable Layout/LineLength
 
-require 'minitest/autorun'
+require_relative 'test_helper'
 require 'pr-readline/readline'
 require 'timeout'
 require_relative 'support/filesystem_completion_helper'
@@ -92,8 +92,8 @@ class TestCompletion < Minitest::Test
       "#{@dir_with_spaces.path}filename with spaces"
     ]
 
-    assert entries.include?(rl_filename_completion_function(dir, 0))
-    assert entries.include?(rl_filename_completion_function(dir, 1))
+    assert_includes(entries, rl_filename_completion_function(dir, 0))
+    assert_includes(entries, rl_filename_completion_function(dir, 1))
     assert_nil rl_filename_completion_function(dir, 2)
   ensure
     @rl_completion_found_quote = false

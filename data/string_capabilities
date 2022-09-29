@@ -1,0 +1,588 @@
+# Extracted from ncurses-6.3-20220924/include/Caps*.
+#
+# This includes capabilities for all systems. This means you will see some
+# extra warnings if PrReadline.load_capabilities is called with verbose
+# enabled.
+#
+# Column 1 is terminfo capability name
+# Column 2 is PrReadline instance variable name (without @_rl_term_ prefix)
+# Anything after column 2 is a description of the capability
+cbt cbt back tab (P)
+bel bel audible signal (bell) (P)
+cr cr carriage return (P*) (P*)
+csr csr change region to line #1 to line #2 (P)
+tbc tbc clear all tab stops (P)
+clear clrpag clear screen and home cursor (P*)
+el clreol clear to end of line (P)
+ed ed clear to end of screen (P*)
+hpa hpa horizontal position #1, absolute (P)
+cmdch cmdch terminal settable cmd character in prototype !?
+cup cup move to row #1 columns #2
+cud1 cud1 down one line
+home home home cursor (if no cup)
+civis civis make cursor invisible
+cub1 backspace move left one space
+mrcup mrcup memory relative cursor addressing, move to row #1 columns #2
+cnorm cnorm make cursor appear normal (undo civis/cvvis)
+cuf1 forward_char non-destructive space (move right one space)
+ll ll last line, first column (if no cup)
+cuu1 up up one line
+cvvis cvvis make cursor very visible
+dch1 dch1 delete character (P*)
+dl1 dl1 delete line (P*)
+dsl dsl disable status line
+hd hd half a line down
+smacs smacs start alternate character set (P)
+blink blink turn on blinking
+bold bold turn on bold (extra bright) mode
+smcup smcup string to start programs using cup
+smdc smdc enter delete mode
+dim dim turn on half-bright mode
+smir smir enter insert mode
+invis invis turn on blank mode (characters invisible)
+prot prot turn on protected mode
+rev rev turn on reverse video mode
+smso smso begin standout mode
+smul smul begin underline mode
+ech ech erase #1 characters (P)
+rmacs rmacs end alternate character set (P)
+sgr0 sgr0 turn off all attributes
+rmcup rmcup strings to end programs using cup
+rmdc rmdc end delete mode
+rmir rmir exit insert mode
+rmso rmso exit standout mode
+rmul rmul exit underline mode
+flash visiable_bell visible bell (may not move cursor)
+ff ff hardcopy terminal page eject (P*)
+fsl fsl return from status line
+is1 is1 initialization string
+is2 is2 initialization string
+is3 is3 initialization string
+if if name of initialization file
+ich1 ich1 insert character (P)
+il1 il1 insert line (P*)
+ip ip insert padding after inserted character
+kbs kbs backspace key
+ktbc ktbc clear-all-tabs key
+kclr kclr clear-screen or erase key
+kctab kctab clear-tab key
+kdch1 kdch1 delete-character key
+kdl1 kdl1 delete-line key
+kcud1 kcud1 down-arrow key
+krmir krmir sent by rmir or smir in insert mode
+kel kel clear-to-end-of-line key
+ked ked clear-to-end-of-screen key
+kf0 kf0 F0 function key
+kf1 kf1 F1 function key
+kf10 kf10 F10 function key
+kf2 kf2 F2 function key
+kf3 kf3 F3 function key
+kf4 kf4 F4 function key
+kf5 kf5 F5 function key
+kf6 kf6 F6 function key
+kf7 kf7 F7 function key
+kf8 kf8 F8 function key
+kf9 kf9 F9 function key
+khome khome home key
+kich1 kich1 insert-character key
+kil1 kil1 insert-line key
+kcub1 kcub1 left-arrow key
+kll kll lower-left key (home down)
+knp knp next-page key
+kpp kpp previous-page key
+kcuf1 kcuf1 right-arrow key
+kind kind scroll-forward key
+kri kri scroll-backward key
+khts khts set-tab key
+kcuu1 kcuu1 up-arrow key
+rmkx rmkx leave 'keyboard_transmit' mode
+smkx smkx enter 'keyboard_transmit' mode
+lf0 lf0 label on function key f0 if not f0
+lf1 lf1 label on function key f1 if not f1
+lf10 lf10 label on function key f10 if not f10
+lf2 lf2 label on function key f2 if not f2
+lf3 lf3 label on function key f3 if not f3
+lf4 lf4 label on function key f4 if not f4
+lf5 lf5 label on function key f5 if not f5
+lf6 lf6 label on function key f6 if not f6
+lf7 lf7 label on function key f7 if not f7
+lf8 lf8 label on function key f8 if not f8
+lf9 lf9 label on function key f9 if not f9
+rmm rmm turn off meta mode
+smm smm turn on meta mode (8th-bit on)
+nel nel newline (behave like cr followed by lf)
+pad pad padding char (instead of null)
+dch dch delete #1 characters (P*)
+dl dl delete #1 lines (P*)
+cud cud down #1 lines (P*)
+ich ich insert #1 characters (P*)
+indn indn scroll forward #1 lines (P)
+il il insert #1 lines (P*)
+cub cub move #1 characters to the left (P)
+cuf cuf move #1 characters to the right (P*)
+rin rin scroll back #1 lines (P)
+cuu cuu up #1 lines (P*)
+pfkey pfkey program function key #1 to type string #2
+pfloc pfloc program function key #1 to execute string #2
+pfx pfx program function key #1 to transmit string #2
+mc0 mc0 print contents of screen
+mc4 mc4 turn off printer
+mc5 mc5 turn on printer
+rep rep repeat char #1 #2 times (P*)
+rs1 rs1 reset string
+rs2 rs2 reset string
+rs3 rs3 reset string
+rf rf name of reset file
+rc rc restore cursor to position of last save_cursor
+vpa vpa vertical position #1 absolute (P)
+sc sc save current cursor position (P)
+ind ind scroll text up (P)
+ri ri scroll text down (P)
+sgr sgr define video attributes #1-#9 (PG9)
+hts hts set a tab in every row, current columns
+wind wind current window is lines #1-#2 cols #3-#4
+ht ht tab to next 8-space hardware tab stop
+tsl tsl move to status line, column #1
+uc uc underline char and move past it
+hu hu half a line up
+iprog iprog path name of program for initialization
+ka1 ka1 upper left of keypad
+ka3 ka3 upper right of keypad
+kb2 kb2 center of keypad
+kc1 kc1 lower left of keypad
+kc3 kc3 lower right of keypad
+mc5p mc5p turn on printer for #1 bytes
+rmp rmp like ip but when in insert mode
+acsc acsc graphics charset pairs, based on vt100
+pln pln program label #1 to show string #2
+kcbt kcbt back-tab key
+smxon smxon turn on xon/xoff handshaking
+rmxon rmxon turn off xon/xoff handshaking
+smam smam turn on automatic margins
+rmam rmam turn off automatic margins
+xonc xonc XON character
+xoffc xoffc XOFF character
+enacs enacs enable alternate char set
+smln smln turn on soft labels
+rmln rmln turn off soft labels
+kbeg kbeg begin key
+kcan kcan cancel key
+kclo kclo close key
+kcmd kcmd command key
+kcpy kcpy copy key
+kcrt kcrt create key
+kend kend end key
+kent kent enter/send key
+kext kext exit key
+kfnd kfnd find key
+khlp khlp help key
+kmrk kmrk mark key
+kmsg kmsg message key
+kmov kmov move key
+knxt knxt next key
+kopn kopn open key
+kopt kopt options key
+kprv kprv previous key
+kprt kprt print key
+krdo krdo redo key
+kref kref reference key
+krfr krfr refresh key
+krpl krpl replace key
+krst krst restart key
+kres kres resume key
+ksav ksav save key
+kspd kspd suspend key
+kund kund undo key
+kBEG kBEG shifted begin key
+kCAN kCAN shifted cancel key
+kCMD kCMD shifted command key
+kCPY kCPY shifted copy key
+kCRT kCRT shifted create key
+kDC kDC shifted delete-character key
+kDL kDL shifted delete-line key
+kslt kslt select key
+kEND kEND shifted end key
+kEOL kEOL shifted clear-to-end-of-line key
+kEXT kEXT shifted exit key
+kFND kFND shifted find key
+kHLP kHLP shifted help key
+kHOM kHOM shifted home key
+kIC kIC shifted insert-character key
+kLFT kLFT shifted left-arrow key
+kMSG kMSG shifted message key
+kMOV kMOV shifted move key
+kNXT kNXT shifted next key
+kOPT kOPT shifted options key
+kPRV kPRV shifted previous key
+kPRT kPRT shifted print key
+kRDO kRDO shifted redo key
+kRPL kRPL shifted replace key
+kRIT kRIT shifted right-arrow key
+kRES kRES shifted resume key
+kSAV kSAV shifted save key
+kSPD kSPD shifted suspend key
+kUND kUND shifted undo key
+rfi rfi send next input char (for ptys)
+kf11 kf11 F11 function key
+kf12 kf12 F12 function key
+kf13 kf13 F13 function key
+kf14 kf14 F14 function key
+kf15 kf15 F15 function key
+kf16 kf16 F16 function key
+kf17 kf17 F17 function key
+kf18 kf18 F18 function key
+kf19 kf19 F19 function key
+kf20 kf20 F20 function key
+kf21 kf21 F21 function key
+kf22 kf22 F22 function key
+kf23 kf23 F23 function key
+kf24 kf24 F24 function key
+kf25 kf25 F25 function key
+kf26 kf26 F26 function key
+kf27 kf27 F27 function key
+kf28 kf28 F28 function key
+kf29 kf29 F29 function key
+kf30 kf30 F30 function key
+kf31 kf31 F31 function key
+kf32 kf32 F32 function key
+kf33 kf33 F33 function key
+kf34 kf34 F34 function key
+kf35 kf35 F35 function key
+kf36 kf36 F36 function key
+kf37 kf37 F37 function key
+kf38 kf38 F38 function key
+kf39 kf39 F39 function key
+kf40 kf40 F40 function key
+kf41 kf41 F41 function key
+kf42 kf42 F42 function key
+kf43 kf43 F43 function key
+kf44 kf44 F44 function key
+kf45 kf45 F45 function key
+kf46 kf46 F46 function key
+kf47 kf47 F47 function key
+kf48 kf48 F48 function key
+kf49 kf49 F49 function key
+kf50 kf50 F50 function key
+kf51 kf51 F51 function key
+kf52 kf52 F52 function key
+kf53 kf53 F53 function key
+kf54 kf54 F54 function key
+kf55 kf55 F55 function key
+kf56 kf56 F56 function key
+kf57 kf57 F57 function key
+kf58 kf58 F58 function key
+kf59 kf59 F59 function key
+kf60 kf60 F60 function key
+kf61 kf61 F61 function key
+kf62 kf62 F62 function key
+kf63 kf63 F63 function key
+el1 el1 Clear to beginning of line
+mgc mgc clear right and left soft margins
+smgl smgl set left soft margin at current column. (ML is not in BSD termcap).
+smgr smgr set right soft margin at current column
+fln fln label format
+sclk sclk set clock, #1 hrs #2 mins #3 secs
+dclk dclk display clock
+rmclk rmclk remove clock
+cwin cwin define a window #1 from #2,#3 to #4,#5
+wingo wingo go to window #1
+hup hup hang-up phone
+dial dial dial number #1
+qdial qdial dial number #1 without checking
+tone tone select touch tone dialing
+pulse pulse select pulse dialing
+hook hook flash switch hook
+pause pause pause for 2-3 seconds
+wait wait wait for dial-tone
+u0 u0 User string #0
+u1 u1 User string #1
+u2 u2 User string #2
+u3 u3 User string #3
+u4 u4 User string #4
+u5 u5 User string #5
+u6 u6 User string #6
+u7 u7 User string #7
+u8 u8 User string #8
+u9 u9 User string #9
+op op Set default pair to its original value
+oc oc Set all color pairs to the original ones
+initc initc initialize color #1 to (#2,#3,#4)
+initp initp Initialize color pair #1 to fg=(#2,#3,#4), bg=(#5,#6,#7)
+scp scp Set current color pair to #1
+setf setf Set foreground color #1
+setb setb Set background color #1
+cpi cpi Change number of characters per inch to #1
+lpi lpi Change number of lines per inch to #1
+chr chr Change horizontal resolution to #1
+cvr cvr Change vertical resolution to #1
+defc defc Define a character #1, #2 dots wide, descender #3
+swidm swidm Enter double-wide mode
+sdrfq sdrfq Enter draft-quality mode
+sitm sitm Enter italic mode
+slm slm Start leftward carriage motion
+smicm smicm Start micro-motion mode
+snlq snlq Enter NLQ mode
+snrmq snrmq Enter normal-quality mode
+sshm sshm Enter shadow-print mode
+ssubm ssubm Enter subscript mode
+ssupm ssupm Enter superscript mode
+sum sum Start upward carriage motion
+rwidm rwidm End double-wide mode
+ritm ritm End italic mode
+rlm rlm End left-motion mode
+rmicm rmicm End micro-motion mode
+rshm rshm End shadow-print mode
+rsubm rsubm End subscript mode
+rsupm rsupm End superscript mode
+rum rum End reverse character motion
+mhpa mhpa Like column_address in micro mode
+mcud1 mcud1 Like cursor_down in micro mode
+mcub1 mcub1 Like cursor_left in micro mode
+mcuf1 mcuf1 Like cursor_right in micro mode
+mvpa mvpa Like row_address #1 in micro mode
+mcuu1 mcuu1 Like cursor_up in micro mode
+porder porder Match software bits to print-head pins
+mcud mcud Like parm_down_cursor in micro mode
+mcub mcub Like parm_left_cursor in micro mode
+mcuf mcuf Like parm_right_cursor in micro mode
+mcuu mcuu Like parm_up_cursor in micro mode
+scs scs Select character set, #1
+smgb smgb Set bottom margin at current line
+smgbp smgbp Set bottom margin at line #1 or (if smgtp is not given) #2 lines from bottom
+smglp smglp Set left (right) margin at column #1
+smgrp smgrp Set right margin at column #1
+smgt smgt Set top margin at current line
+smgtp smgtp Set top (bottom) margin at row #1
+sbim sbim Start printing bit image graphics
+scsd scsd Start character set definition #1, with #2 characters in the set
+rbim rbim Stop printing bit image graphics
+rcsd rcsd End definition of character set #1
+subcs subcs List of subscriptable characters
+supcs supcs List of superscriptable characters
+docr docr Printing any of these characters causes CR
+zerom zerom No motion for subsequent character
+csnm csnm Produce #1'th item from list of character set names
+kmous kmous Mouse event has occurred
+minfo minfo Mouse status information
+reqmp reqmp Request mouse position
+getm getm Curses should get button events, parameter #1 not documented.
+setaf setaf Set foreground color to #1, using ANSI escape
+setab setab Set background color to #1, using ANSI escape
+pfxl pfxl Program function key #1 to type string #2 and show string #3
+devt devt Indicate language/codeset support
+csin csin Init sequence for multiple codesets
+s0ds s0ds Shift to codeset 0 (EUC set 0, ASCII)
+s1ds s1ds Shift to codeset 1
+s2ds s2ds Shift to codeset 2
+s3ds s3ds Shift to codeset 3
+smglr smglr Set both left and right margins to #1, #2. (ML is not in BSD termcap).
+smgtb smgtb Sets both top and bottom margins to #1, #2
+birep birep Repeat bit image cell #1 #2 times
+binel binel Move to next row of the bit image
+bicr bicr Move to beginning of same row
+colornm colornm Give name for color #1
+defbi defbi Define rectangular bit image region
+endbi endbi End a bit-image region
+setcolor setcolor Change to ribbon color #1
+slines slines Set page length to #1 lines
+dispc dispc Display PC character #1
+smpch smpch Enter PC character display mode
+rmpch rmpch Exit PC character display mode
+smsc smsc Enter PC scancode mode
+rmsc rmsc Exit PC scancode mode
+pctrm pctrm PC terminal options
+scesc scesc Escape for scancode emulation
+scesa scesa Alternate escape for scancode emulation
+ehhlm ehhlm Enter horizontal highlight mode
+elhlm elhlm Enter left highlight mode
+elohlm elohlm Enter low highlight mode
+erhlm erhlm Enter right highlight mode
+ethlm ethlm Enter top highlight mode
+evhlm evhlm Enter vertical highlight mode
+sgr1 sgr1 Define second set of video attributes #1-#6
+slength slength Set page length to #1 hundredth of an inch (some implementations use sL for termcap).
+OTi2 OTi2 secondary initialization string
+OTrs OTrs terminal reset string
+OTnl OTnl use to move down
+OTbc OTbc move left, if not ^H
+OTko OTko list of self-mapped keycaps
+OTma OTma map motion-keys for vi version 2
+OTG2 OTG2 single upper left
+OTG3 OTG3 single lower left
+OTG1 OTG1 single upper right
+OTG4 OTG4 single lower right
+OTGR OTGR tee pointing right
+OTGL OTGL tee pointing left
+OTGU OTGU tee pointing up
+OTGD OTGD tee pointing down
+OTGH OTGH single horizontal line
+OTGV OTGV single vertical line
+OTGC OTGC single intersection
+meml meml lock memory above cursor
+memu memu unlock memory
+box1 box1 box characters primary set
+box2 box2 box characters secondary set
+batt1 batt1 attributes for box1
+batt2 batt2 attributes for box2
+colb0 colb0 background color 0
+colb1 colb1 background color 1
+colb2 colb2 background color 2
+colb3 colb3 background color 3
+colb4 colb4 background color 4
+colb5 colb5 background color 5
+colb6 colb6 background color 6
+colb7 colb7 background color 7
+colf0 colf0 foreground color 0
+colf1 colf1 foreground color 1
+colf2 colf2 foreground color 2
+colf3 colf3 foreground color 3
+colf4 colf4 foreground color 4
+colf5 colf5 foreground color 5
+colf6 colf6 foreground color 6
+colf7 colf7 foreground color 7
+font0 font0 select font 0
+font1 font1 select font 1
+font2 font2 select font 2
+font3 font3 select font 3
+font4 font4 select font 4
+font5 font5 select font 5
+font6 font6 select font 6
+font7 font7 select font 7
+kbtab kbtab backtab key
+kdo kdo do request key
+kcpn kcpn command-pane key
+knl knl newline key
+knpn knpn next-pane key
+kpcmd kpcmd previous-command key
+kppn kppn previous-pane key
+kquit kquit quit key
+ksel ksel select key
+kscl kscl scroll left
+kscr kscr scroll right
+ktab ktab tab key
+kmpf1 kmpf1 special mapped key 1 input
+kmpt1 kmpt1 special mapped key 1 output
+kmpf2 kmpf2 special mapped key 2 input
+kmpt2 kmpt2 special mapped key 2 output
+kmpf3 kmpf3 special mapped key 3 input
+kmpt3 kmpt3 special mapped key 3 output
+kmpf4 kmpf4 special mapped key 4 input
+kmpt4 kmpt4 special mapped key 4 output
+kmpf5 kmpf5 special mapped key 5 input
+kmpt5 kmpt5 special mapped key 5 output
+apstr apstr application-defined string
+kmpf6 kmpf6 special mapped key 6 input
+kmpt6 kmpt6 special mapped key 6 output
+kmpf7 kmpf7 special mapped key 7 input
+kmpt7 kmpt7 special mapped key 7 output
+kmpf8 kmpf8 special mapped key 8 input
+kmpt8 kmpt8 special mapped key 8 output
+kmpf9 kmpf9 special mapped key 9 input
+kmpt9 kmpt9 special mapped key 9 output
+ksf1 ksf1 special function key 1
+ksf2 ksf2 special function key 2
+ksf3 ksf3 special function key 3
+ksf4 ksf4 special function key 4
+ksf5 ksf5 special function key 5
+ksf6 ksf6 special function key 6
+ksf7 ksf7 special function key 7
+ksf8 ksf8 special function key 8
+ksf9 ksf9 special function key 9
+ksf10 ksf10 special function key 10
+kact kact sent by action key
+topl topl start top-line mode
+btml btml start bottom-line mode
+rvert rvert start right-vertical mode
+lvert lvert start left-vertical mode
+rmhhlm rmhhlm Exit horizontal highlight mode
+rmlhlm rmlhlm Exit left highlight mode
+rmlohlm rmlohlm Exit low highlight mode
+rmrhlm rmrhlm Exit right highlight mode
+rmthlm rmthlm Exit top highlight mode
+rmvhlm rmvhlm Exit vertical highlight mode
+kUP kUP shifted up-arrow key
+kDOWN kDOWN shifted down-arrow key
+kBS kBS shifted backspace key
+kcdelete kcdelete control- delete-character key
+kcend kcend control- end key
+kchom kchom control- home key
+kcinsert kcinsert control- insert-character key
+kclft kclft control- left-arrow key
+kcnxt kcnxt control- next key
+kcprv kcprv control- previous key
+kcprt kcprt control- print key
+kcrit kcrit control- right-arrow key
+kcbs kcbs control- backspace key
+kcup kcup control- up-arrow key
+kcdown kcdown control- down-arrow key
+kadelete kadelete alt- delete-character key
+kaend kaend alt- end key
+kahom kahom alt- home key
+kainsert kainsert alt- insert-character key
+kalft kalft alt- left-arrow key
+kanxt kanxt alt- next key
+kaprv kaprv alt- previous key
+kaprt kaprt alt- print key
+karit karit alt- right-arrow key
+kabs kabs alt- backspace key
+kaup kaup alt- up-arrow key
+kadown kadown alt- down-arrow key
+kaa kaa alt- a key
+kab kab alt- b key
+kac kac alt- c key
+kad kad alt- d key
+kae kae alt- e key
+kaf kaf alt- f key
+kag kag alt- g key
+kah kah alt- h key
+kai kai alt- i key
+kaj kaj alt- j key
+kak kak alt- k key
+kal kal alt- l key
+kam kam alt- m key
+kan kan alt- n key
+kao kao alt- o key
+kap kap alt- p key
+kaq kaq alt- q key
+kar kar alt- r key
+kas kas alt- s key
+kat kat alt- t key
+kau kau alt- u key
+kav kav alt- v key
+kaw kaw alt- w key
+kax kax alt- x key
+kay kay alt- y key
+kaz kaz alt- z key
+ka_0 ka_0 alt- 0 key
+ka_1 ka_1 alt- 1 key
+ka_2 ka_2 alt- 2 key
+ka_3 ka_3 alt- 3 key
+ka_4 ka_4 alt- 4 key
+ka_5 ka_5 alt- 5 key
+ka_6 ka_6 alt- 6 key
+ka_7 ka_7 alt- 7 key
+ka_8 ka_8 alt- 8 key
+ka_9 ka_9 alt- 9 key
+ka_bt ka_bt alt- ` key
+ka_und ka_und alt- _ key
+ka_eq ka_eq alt- = key
+ka_bsl ka_bsl alt- | key
+ka_lbr ka_lbr alt- [ key
+ka_rbr ka_rbr alt- ] key
+ka_semi ka_semi alt- ; key
+ka_tick ka_tick alt- ' key
+ka_com ka_com alt- , key
+ka_dot ka_dot alt- . key
+ka_sla ka_sla alt- ? key
+ka_div ka_div alt- keypad / key
+ka_mul ka_mul alt- keypad * key
+ka_add ka_add alt- keypad + key
+ka_sub ka_sub alt- keypad - key
+ka_kent ka_kent alt- keypad enter key
+ka_ent ka_ent alt- enter key
+kcat kcat control- @ key
+kcdiv kcdiv control- keypad / key
+kcmul kcmul control- keypad * key
+kcadd kcadd control- keypad + key
+kcsub kcsub control- keypad - key
+relm relm Curses should release the mouse */

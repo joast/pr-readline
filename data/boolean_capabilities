@@ -1,0 +1,53 @@
+# Extracted from ncurses-6.3-20220924/include/Caps*.
+#
+# This includes capabilities for all systems. This means you will see some
+# extra warnings if PrReadline.load_capabilities is called with verbose
+# enabled.
+#
+# Column 1 is terminfo capability name
+# Column 2 is PrReadline instance variable name (without @_rl_term_ prefix)
+# Anything after column 2 is a description of the capability
+bw bw cub1 wraps from column 0 to last column
+am am terminal has automatic margins
+xsb xsb beehive (f1=escape, f2=ctrl C)
+xhp xhp standout not erased by overwriting (hp)
+xenl xenl newline ignored after 80 cols (concept)
+eo eo can erase overstrikes with a blank
+gn gn generic line type
+hc hc hardcopy terminal
+km km Has a meta key (i.e., sets 8th-bit)
+hs hs has extra status line
+in in insert mode distinguishes nulls
+da da display may be retained above the screen
+db db display may be retained below the screen
+mir mir safe to move while in insert mode
+msgr msgr safe to move while in standout mode
+os os terminal can overstrike
+eslok eslok escape can be used on the status line
+xt xt tabs destructive, magic so char (t1061)
+hz hz cannot print ~'s (Hazeltine)
+ul ul underline character overstrikes
+xon xon terminal uses xon/xoff handshaking
+nxon nxon padding will not work, xon/xoff required
+mc5i mc5i printer will not echo on screen
+chts chts cursor is hard to see
+nrrmc nrrmc smcup does not reverse rmcup
+npc npc pad character does not exist
+ndscr ndscr scrolling region is non-destructive
+ccc ccc terminal can re-define existing colors
+bce bce screen erased with background color
+hls hls terminal uses only HLS color notation (Tektronix)
+xhpa xhpa only positive motion for hpa/mhpa caps
+crxm crxm using cr turns off micro mode
+daisy daisy printer needs operator to change character set
+xvpa xvpa only positive motion for vpa/mvpa caps
+sam sam printing in last column causes cr
+cpix cpix changing character pitch changes resolution
+lpix lpix changing line pitch changes resolution
+OTbs OTbs uses ^H to move left
+OTns OTns crt cannot scroll
+OTnc OTnc no way to go to start of line
+OTMT OTMT has meta key
+OTNL OTNL move down with \n
+OTpt OTpt has 8-char tabs invoked with ^I
+OTxr OTxr return clears the line

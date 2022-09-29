@@ -1,1 +1,4 @@
 - use rspec instead of minitest
+- complete vi mode
+- Windows
+- many more tests

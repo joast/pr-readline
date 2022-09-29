@@ -1,0 +1,9 @@
+CHANGES crlf
+.gitattributes crlf
+.gitignore crlf
+LICENSE crlf
+*.md crlf
+pr-readline.gemspec crlf
+Rakefile crlf
+*.rb crlf
+*.yml crlf

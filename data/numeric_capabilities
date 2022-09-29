@@ -1,0 +1,48 @@
+# Extracted from ncurses-6.3-20220924/include/Caps*.
+#
+# This includes capabilities for all systems. This means you will see some
+# extra warnings if PrReadline.load_capabilities is called with verbose
+# enabled.
+#
+# Column 1 is terminfo capability name
+# Column 2 is PrReadline instance variable name (without @_rl_term_ prefix)
+# Anything after column 2 is a description of the capability
+cols cols number of columns in a line
+it it tabs initially every # spaces
+lines lines number of lines on screen or page
+lm lm lines of memory if > line. 0 means varies
+xmc xmc number of blank characters left by smso or rmso
+pb pb lowest baud rate where padding needed
+vt vt virtual terminal number (CB/unix)
+wsl wsl number of columns in status line
+nlab nlab number of labels on screen
+lh lh rows in each label
+lw lw columns in each label
+ma ma maximum combined attributes terminal can handle
+wnum wnum maximum number of definable windows
+colors colors maximum number of colors on screen
+pairs pairs maximum number of color-pairs on the screen
+ncv ncv video attributes that cannot be used with colors
+bufsz bufsz numbers of bytes buffered before printing
+spinv spinv spacing of pins vertically in pins per inch
+spinh spinh spacing of dots horizontally in dots per inch
+maddr maddr maximum value in micro_..._address
+mjump mjump maximum value in parm_..._micro
+mcs mcs character step size when in micro mode
+mls mls line step size when in micro mode
+npins npins numbers of pins in print-head
+orc orc horizontal resolution in units per line
+orl orl vertical resolution in units per line
+orhi orhi horizontal resolution in units per inch
+orvi orvi vertical resolution in units per inch
+cps cps print rate in characters per second
+widcs widcs character step size when in double wide mode
+btns btns number of buttons on mouse
+bitwin bitwin number of passes for each bit-image row
+bitype bitype type of bit-image device
+OTug OTug number of blanks left by ul
+OTdC OTdC pad needed for CR
+OTdN OTdN pad needed for LF
+OTdB OTdB padding required for ^H
+OTdT OTdT padding required for ^I
+OTkn OTkn count of function keys

@@ -5,7 +5,7 @@
 # rubocop:disable Metrics/ClassLength
 # rubocop:disable Metrics/MethodLength
 
-require 'minitest/autorun'
+require_relative 'test_helper'
 require 'pr-readline/readline'
 
 class TestReadline < Minitest::Test # :nodoc:
@@ -24,7 +24,7 @@ class TestReadline < Minitest::Test # :nodoc:
   def test_readline_with_default_parameters_does_not_error
     thread = Thread.new { Readline.readline }
     sleep 0.1
-    assert thread.alive?
+    assert_predicate(thread, :alive?)
   ensure
     thread.kill
   end
@@ -65,7 +65,7 @@ class TestReadline < Minitest::Test # :nodoc:
   end
 
   def test_completion_case_fold_default
-    assert_equal(false, Readline.completion_case_fold) # default
+    refute(Readline.completion_case_fold) # default
   end
 
   def test_completion_case_fold_set_basic
@@ -90,7 +90,7 @@ class TestReadline < Minitest::Test # :nodoc:
     assert_respond_to(Readline, :vi_editing_mode?)
 
     Readline.emacs_editing_mode
-    refute(Readline.vi_editing_mode?)
+    refute_predicate(Readline, :vi_editing_mode?)
   end
 
   def test_emacs_editing_mode_basic
@@ -101,7 +101,7 @@ class TestReadline < Minitest::Test # :nodoc:
     assert_respond_to(Readline, :emacs_editing_mode?)
 
     Readline.emacs_editing_mode
-    assert(Readline.emacs_editing_mode?)
+    assert_predicate(Readline, :emacs_editing_mode?)
   end
 
   def test_completion_append_character_get_basic

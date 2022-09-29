@@ -36,6 +36,7 @@ Gem::Specification.new do |spec|
 
   # runtime dependencies
   spec.add_dependency 'etc', '>= 1.0'
+  spec.add_dependency 'io-console', '>= 0.5'
   spec.add_dependency 'strscan', '>= 2.0'
 
   # components, files and paths

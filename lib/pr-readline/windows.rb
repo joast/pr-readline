@@ -24,8 +24,8 @@ module PrReadline # :nodoc:
 
       CALL_TYPE_TO_ABI = {
         :stdcall => 1,
-        :cdecl => 1,
-        nil => 1
+        :cdecl   => 1,
+        nil      => 1
       } # Taken from Fiddle::Importer
 
       def initialize(dllname, func, import, _export, calltype = :stdcall)

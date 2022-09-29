@@ -6,7 +6,7 @@
 # rubocop:disable Metrics/MethodLength
 # rubocop:disable Layout/LineLength
 
-require 'minitest/autorun'
+require_relative 'test_helper'
 require 'pr-readline/readline'
 require 'fileutils'
 require 'rbconfig'
@@ -78,16 +78,18 @@ class TestFilenameCompletionProc < Minitest::Test
   end
 
   def test_listing_files_with_no_read_access
-    FileUtils.mkdir('test_no_access')
-    FileUtils.touch('test_no_access/123')
-
     skip 'chmod is noop in Windows' if windows?
 
-    FileUtils.chmod(0o333, 'test_no_access')
-    assert_nil Readline::FILENAME_COMPLETION_PROC.call(+'test_no_access/')
-  ensure
-    FileUtils.chmod(0o775, 'test_no_access')
-    FileUtils.rm_r('test_no_access')
+    begin
+      FileUtils.mkdir('test_no_access')
+      FileUtils.touch('test_no_access/123')
+
+      FileUtils.chmod(0o333, 'test_no_access')
+      assert_nil Readline::FILENAME_COMPLETION_PROC.call(+'test_no_access/')
+    ensure
+      FileUtils.chmod(0o775, 'test_no_access')
+      FileUtils.rm_r('test_no_access')
+    end
   end
 
   def windows?

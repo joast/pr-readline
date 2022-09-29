@@ -21,12 +21,23 @@
 # rubocop:disable Naming/VariableName
 
 require_relative 'version'
-require 'strscan'
+require_relative 'helpers'
+require_relative 'terminfo'
+require_relative 'capabilities'
+require_relative 'screen'
 require 'etc'
+require 'set'
+require 'strscan'
 
 module PrReadline # :nodoc:
+  unless File.directory?(Dir.home)
+    raise "HOME directory (#{Dir.home}) must be a directory"
+  end
+
   NUL_CHAR = 0.chr
 
+  # TODO: Update these when everything else is fixed
+  # current values in GNU readline are "8.0" and 0x0800
   RL_LIBRARY_VERSION = '5.2'
   RL_READLINE_VERSION  = 0x0502
 
@@ -98,32 +109,33 @@ module PrReadline # :nodoc:
   KSEQ_RECURSIVE  = 0x04
 
   # Possible state values for rl_readline_state
-  RL_STATE_NONE         = 0x000000 # no state before first call
-  RL_STATE_INITIALIZING = 0x000001 # initializing
-  RL_STATE_INITIALIZED  = 0x000002 # initialization done
-  RL_STATE_TERMPREPPED  = 0x000004 # terminal is prepped
-  RL_STATE_READCMD      = 0x000008 # reading a command key
-  RL_STATE_METANEXT     = 0x000010 # reading input after ESC
-  RL_STATE_DISPATCHING  = 0x000020 # dispatching to a command
-  RL_STATE_MOREINPUT    = 0x000040 # reading more input in a command function
-  RL_STATE_ISEARCH      = 0x000080 # doing incremental search
-  RL_STATE_NSEARCH      = 0x000100 # doing non-inc search
-  RL_STATE_SEARCH       = 0x000200 # doing a history search
-  RL_STATE_NUMERICARG   = 0x000400 # reading numeric argument
-  RL_STATE_MACROINPUT   = 0x000800 # getting input from a macro
-  RL_STATE_MACRODEF     = 0x001000 # defining keyboard macro
-  RL_STATE_OVERWRITE    = 0x002000 # overwrite mode
-  RL_STATE_COMPLETING   = 0x004000 # doing completion
-  RL_STATE_SIGHANDLER   = 0x008000 # in readline sighandler
-  RL_STATE_UNDOING      = 0x010000 # doing an undo
-  RL_STATE_INPUTPENDING = 0x020000 # rl_execute_next called
-  RL_STATE_TTYCSAVED    = 0x040000 # tty special chars saved
-  RL_STATE_CALLBACK     = 0x080000 # using the callback interface
-  RL_STATE_VIMOTION     = 0x100000 # reading vi motion arg
-  RL_STATE_MULTIKEY     = 0x200000 # reading multiple-key command
-  RL_STATE_VICMDONCE    = 0x400000 # entered vi command mode at least once
-
-  RL_STATE_DONE         = 0x800000 # done accepted line
+  RL_STATE_NONE         = 0x0000000 # no state before first call
+  RL_STATE_INITIALIZING = 0x0000001 # initializing
+  RL_STATE_INITIALIZED  = 0x0000002 # initialization done
+  RL_STATE_TERMPREPPED  = 0x0000004 # terminal is prepped
+  RL_STATE_READCMD      = 0x0000008 # reading a command key
+  RL_STATE_METANEXT     = 0x0000010 # reading input after ESC
+  RL_STATE_DISPATCHING  = 0x0000020 # dispatching to a command
+  RL_STATE_MOREINPUT    = 0x0000040 # reading more input in a command function
+  RL_STATE_ISEARCH      = 0x0000080 # doing incremental search
+  RL_STATE_NSEARCH      = 0x0000100 # doing non-inc search
+  RL_STATE_SEARCH       = 0x0000200 # doing a history search
+  RL_STATE_NUMERICARG   = 0x0000400 # reading numeric argument
+  RL_STATE_MACROINPUT   = 0x0000800 # getting input from a macro
+  RL_STATE_MACRODEF     = 0x0001000 # defining keyboard macro
+  RL_STATE_OVERWRITE    = 0x0002000 # overwrite mode
+  RL_STATE_COMPLETING   = 0x0004000 # doing completion
+  RL_STATE_SIGHANDLER   = 0x0008000 # in readline sighandler
+  RL_STATE_UNDOING      = 0x0010000 # doing an undo
+  RL_STATE_INPUTPENDING = 0x0020000 # rl_execute_next called
+  RL_STATE_TTYCSAVED    = 0x0040000 # tty special chars saved
+  RL_STATE_CALLBACK     = 0x0080000 # using the callback interface
+  RL_STATE_VIMOTION     = 0x0100000 # reading vi motion arg
+  RL_STATE_MULTIKEY     = 0x0200000 # reading multiple-key command
+  RL_STATE_VICMDONCE    = 0x0400000 # entered vi command mode at least once
+  RL_STATE_CHARSEARCH   = 0x0800000 # vi mode char search
+  RL_STATE_REDISPLAYING = 0x1000000 # updating terminal display
+  RL_STATE_DONE         = 0x2000000 # done; accepted line
 
   NO_BELL      = 0
   AUDIBLE_BELL = 1
@@ -186,6 +198,8 @@ module PrReadline # :nodoc:
 
   @sigint_proc = nil
   @sigint_blocked = false
+
+  @terminal_io_initialized = false
 
   @rl_prep_term_function = :rl_prep_terminal
   @rl_deprep_term_function = :rl_deprep_terminal
@@ -338,13 +352,10 @@ module PrReadline # :nodoc:
   @vis_lbreaks = nil
   @_rl_wrapped_line = nil
 
-  @term_buffer = nil
-  @term_string_buffer = nil
+  @tinfo_initialized = false
 
-  @tcap_initialized = false
-
-  # While we are editing the history, this is the saved
-  #   version of the original line.
+  # While we are editing the history, this is the saved version of the
+  # original line.
   @_rl_saved_line_for_history = nil
 
   # An array of HIST_ENTRY.  This is where we store the history.
@@ -405,98 +416,102 @@ module PrReadline # :nodoc:
   # Arrays for the saved marks.
   @vi_mark_chars = Array.new(26, -1)
 
+  # If this is true, then change LINES, ROWS, and COLUMNS in the environment
+  # when the terminal size changes.
+  @rl_change_environment = true
+
   @emacs_standard_keymap = {
-    "\C-@" => :rl_set_mark,
-    "\C-a" => :rl_beg_of_line,
-    "\C-b" => :rl_backward_char,
-    "\C-d" => :rl_delete,
-    "\C-e" => :rl_end_of_line,
-    "\C-f" => :rl_forward_char,
-    "\C-g" => :rl_abort,
-    "\C-h" => :rl_rubout,
-    "\C-i" => :rl_complete,
-    "\C-j" => :rl_newline,
-    "\C-k" => :rl_kill_line,
-    "\C-l" => :rl_clear_screen,
-    "\C-m" => :rl_newline,
-    "\C-n" => :rl_get_next_history,
-    "\C-p" => :rl_get_previous_history,
-    "\C-q" => :rl_quoted_insert,
-    "\C-r" => :rl_reverse_search_history,
-    "\C-s" => :rl_forward_search_history,
-    "\C-t" => :rl_transpose_chars,
-    "\C-u" => :rl_unix_line_discard,
-    "\C-v" => :rl_quoted_insert,
-    "\C-w" => :rl_unix_word_rubout,
-    "\C-y" => :rl_yank,
-    "\C-]" => :rl_char_search,
-    "\C-_" => :rl_undo_command,
-    "\x7F" => :rl_rubout,
-    "\e\C-g" => :rl_abort,
-    "\e\C-h" => :rl_backward_kill_word,
-    "\e\C-i" => :rl_tab_insert,
-    "\e\C-j" => :rl_vi_editing_mode,
-    "\e\C-m" => :rl_vi_editing_mode,
-    "\e\C-r" => :rl_revert_line,
-    "\e\C-y" => :rl_yank_nth_arg,
-    "\e\C-[" => :rl_complete,
-    "\e\C-]" => :rl_backward_char_search,
-    "\e " => :rl_set_mark,
-    "\e#" => :rl_insert_comment,
-    "\e&" => :rl_tilde_expand,
-    "\e*" => :rl_insert_completions,
-    "\e-" => :rl_digit_argument,
-    "\e." => :rl_yank_last_arg,
-    "\e0" => :rl_digit_argument,
-    "\e1" => :rl_digit_argument,
-    "\e2" => :rl_digit_argument,
-    "\e3" => :rl_digit_argument,
-    "\e4" => :rl_digit_argument,
-    "\e5" => :rl_digit_argument,
-    "\e6" => :rl_digit_argument,
-    "\e7" => :rl_digit_argument,
-    "\e8" => :rl_digit_argument,
-    "\e9" => :rl_digit_argument,
-    "\e<" => :rl_beginning_of_history,
-    "\e=" => :rl_possible_completions,
-    "\e>" => :rl_end_of_history,
-    "\e?" => :rl_possible_completions,
-    "\eB" => :rl_backward_word,
-    "\eC" => :rl_capitalize_word,
-    "\eD" => :rl_kill_word,
-    "\eF" => :rl_forward_word,
-    "\eL" => :rl_downcase_word,
-    "\eN" => :rl_noninc_forward_search,
-    "\eP" => :rl_noninc_reverse_search,
-    "\eR" => :rl_revert_line,
-    "\eT" => :rl_transpose_words,
-    "\eU" => :rl_upcase_word,
-    "\eY" => :rl_yank_pop,
-    "\e\\" => :rl_delete_horizontal_space,
-    "\e_" => :rl_yank_last_arg,
-    "\eb" => :rl_backward_word,
-    "\ec" => :rl_capitalize_word,
-    "\ed" => :rl_kill_word,
-    "\ef" => :rl_forward_word,
-    "\el" => :rl_downcase_word,
-    "\en" => :rl_noninc_forward_search,
-    "\ep" => :rl_noninc_reverse_search,
-    "\er" => :rl_revert_line,
-    "\et" => :rl_transpose_words,
-    "\eu" => :rl_upcase_word,
-    "\ey" => :rl_yank_pop,
-    "\e~" => :rl_tilde_expand,
-    "\377" => :rl_backward_kill_word,
-    "\e\x7F" => :rl_backward_kill_word,
+    "\C-@"     => :rl_set_mark,
+    "\C-a"     => :rl_beg_of_line,
+    "\C-b"     => :rl_backward_char,
+    "\C-d"     => :rl_delete,
+    "\C-e"     => :rl_end_of_line,
+    "\C-f"     => :rl_forward_char,
+    "\C-g"     => :rl_abort,
+    "\C-h"     => :rl_rubout,
+    "\C-i"     => :rl_complete,
+    "\C-j"     => :rl_newline,
+    "\C-k"     => :rl_kill_line,
+    "\C-l"     => :rl_clear_screen,
+    "\C-m"     => :rl_newline,
+    "\C-n"     => :rl_get_next_history,
+    "\C-p"     => :rl_get_previous_history,
+    "\C-q"     => :rl_quoted_insert,
+    "\C-r"     => :rl_reverse_search_history,
+    "\C-s"     => :rl_forward_search_history,
+    "\C-t"     => :rl_transpose_chars,
+    "\C-u"     => :rl_unix_line_discard,
+    "\C-v"     => :rl_quoted_insert,
+    "\C-w"     => :rl_unix_word_rubout,
+    "\C-y"     => :rl_yank,
+    "\C-]"     => :rl_char_search,
+    "\C-_"     => :rl_undo_command,
+    "\x7F"     => :rl_rubout,
+    "\e\C-g"   => :rl_abort,
+    "\e\C-h"   => :rl_backward_kill_word,
+    "\e\C-i"   => :rl_tab_insert,
+    "\e\C-j"   => :rl_vi_editing_mode,
+    "\e\C-m"   => :rl_vi_editing_mode,
+    "\e\C-r"   => :rl_revert_line,
+    "\e\C-y"   => :rl_yank_nth_arg,
+    "\e\C-["   => :rl_complete,
+    "\e\C-]"   => :rl_backward_char_search,
+    "\e "      => :rl_set_mark,
+    "\e#"      => :rl_insert_comment,
+    "\e&"      => :rl_tilde_expand,
+    "\e*"      => :rl_insert_completions,
+    "\e-"      => :rl_digit_argument,
+    "\e."      => :rl_yank_last_arg,
+    "\e0"      => :rl_digit_argument,
+    "\e1"      => :rl_digit_argument,
+    "\e2"      => :rl_digit_argument,
+    "\e3"      => :rl_digit_argument,
+    "\e4"      => :rl_digit_argument,
+    "\e5"      => :rl_digit_argument,
+    "\e6"      => :rl_digit_argument,
+    "\e7"      => :rl_digit_argument,
+    "\e8"      => :rl_digit_argument,
+    "\e9"      => :rl_digit_argument,
+    "\e<"      => :rl_beginning_of_history,
+    "\e="      => :rl_possible_completions,
+    "\e>"      => :rl_end_of_history,
+    "\e?"      => :rl_possible_completions,
+    "\eB"      => :rl_backward_word,
+    "\eC"      => :rl_capitalize_word,
+    "\eD"      => :rl_kill_word,
+    "\eF"      => :rl_forward_word,
+    "\eL"      => :rl_downcase_word,
+    "\eN"      => :rl_noninc_forward_search,
+    "\eP"      => :rl_noninc_reverse_search,
+    "\eR"      => :rl_revert_line,
+    "\eT"      => :rl_transpose_words,
+    "\eU"      => :rl_upcase_word,
+    "\eY"      => :rl_yank_pop,
+    "\e\\"     => :rl_delete_horizontal_space,
+    "\e_"      => :rl_yank_last_arg,
+    "\eb"      => :rl_backward_word,
+    "\ec"      => :rl_capitalize_word,
+    "\ed"      => :rl_kill_word,
+    "\ef"      => :rl_forward_word,
+    "\el"      => :rl_downcase_word,
+    "\en"      => :rl_noninc_forward_search,
+    "\ep"      => :rl_noninc_reverse_search,
+    "\er"      => :rl_revert_line,
+    "\et"      => :rl_transpose_words,
+    "\eu"      => :rl_upcase_word,
+    "\ey"      => :rl_yank_pop,
+    "\e~"      => :rl_tilde_expand,
+    "\377"     => :rl_backward_kill_word,
+    "\e\x7F"   => :rl_backward_kill_word,
 
     "\C-x\C-g" => :rl_abort,
     "\C-x\C-r" => :rl_re_read_init_file,
     "\C-x\C-u" => :rl_undo_command,
     "\C-x\C-x" => :rl_exchange_point_and_mark,
-    "\C-x(" => :rl_start_kbd_macro,
-    "\C-x)" => :rl_end_kbd_macro,
-    "\C-xE" => :rl_call_last_kbd_macro,
-    "\C-xe" => :rl_call_last_kbd_macro,
+    "\C-x("    => :rl_start_kbd_macro,
+    "\C-x)"    => :rl_end_kbd_macro,
+    "\C-xE"    => :rl_call_last_kbd_macro,
+    "\C-xe"    => :rl_call_last_kbd_macro,
     "\C-x\x7F" => :rl_backward_kill_line
   }
 
@@ -520,116 +535,116 @@ module PrReadline # :nodoc:
     "\C-w" => :rl_unix_word_rubout,
     "\C-y" => :rl_yank,
     "\C-_" => :rl_vi_undo,
-    ' ' => :rl_forward_char,
-    '#' => :rl_insert_comment,
-    '$' => :rl_end_of_line,
-    '%' => :rl_vi_match,
-    '&' => :rl_vi_tilde_expand,
-    '*' => :rl_vi_complete,
-    '+' => :rl_get_next_history,
-    ',' => :rl_vi_char_search,
-    '-' => :rl_get_previous_history,
-    '.' => :rl_vi_redo,
-    '/' => :rl_vi_search,
-    '0' => :rl_beg_of_line,
-    '1' => :rl_vi_arg_digit,
-    '2' => :rl_vi_arg_digit,
-    '3' => :rl_vi_arg_digit,
-    '4' => :rl_vi_arg_digit,
-    '5' => :rl_vi_arg_digit,
-    '6' => :rl_vi_arg_digit,
-    '7' => :rl_vi_arg_digit,
-    '8' => :rl_vi_arg_digit,
-    '9' => :rl_vi_arg_digit,
-    '' => :rl_vi_char_search,
-    '=' => :rl_vi_complete,
-    '?' => :rl_vi_search,
-    'A' => :rl_vi_append_eol,
-    'B' => :rl_vi_prev_word,
-    'C' => :rl_vi_change_to,
-    'D' => :rl_vi_delete_to,
-    'E' => :rl_vi_end_word,
-    'F' => :rl_vi_char_search,
-    'G' => :rl_vi_fetch_history,
-    'I' => :rl_vi_insert_beg,
-    'N' => :rl_vi_search_again,
-    'P' => :rl_vi_put,
-    'R' => :rl_vi_replace,
-    'S' => :rl_vi_subst,
-    'T' => :rl_vi_char_search,
-    'U' => :rl_revert_line,
-    'W' => :rl_vi_next_word,
-    'X' => :rl_vi_rubout,
-    'Y' => :rl_vi_yank_to,
-    '\\' => :rl_vi_complete,
-    '^' => :rl_vi_first_print,
-    '_' => :rl_vi_yank_arg,
-    '`' => :rl_vi_goto_mark,
-    'a' => :rl_vi_append_mode,
-    'b' => :rl_vi_prev_word,
-    'c' => :rl_vi_change_to,
-    'd' => :rl_vi_delete_to,
-    'e' => :rl_vi_end_word,
-    'f' => :rl_vi_char_search,
-    'h' => :rl_backward_char,
-    'i' => :rl_vi_insertion_mode,
-    'j' => :rl_get_next_history,
-    'k' => :rl_get_previous_history,
-    'l' => :rl_forward_char,
-    'm' => :rl_vi_set_mark,
-    'n' => :rl_vi_search_again,
-    'p' => :rl_vi_put,
-    'r' => :rl_vi_change_char,
-    's' => :rl_vi_subst,
-    't' => :rl_vi_char_search,
-    'u' => :rl_vi_undo,
-    'w' => :rl_vi_next_word,
-    'x' => :rl_vi_delete,
-    'y' => :rl_vi_yank_to,
-    '|' => :rl_vi_column,
-    '~' => :rl_vi_change_case
+    ' '    => :rl_forward_char,
+    '#'    => :rl_insert_comment,
+    '$'    => :rl_end_of_line,
+    '%'    => :rl_vi_match,
+    '&'    => :rl_vi_tilde_expand,
+    '*'    => :rl_vi_complete,
+    '+'    => :rl_get_next_history,
+    ','    => :rl_vi_char_search,
+    '-'    => :rl_get_previous_history,
+    '.'    => :rl_vi_redo,
+    '/'    => :rl_vi_search,
+    '0'    => :rl_beg_of_line,
+    '1'    => :rl_vi_arg_digit,
+    '2'    => :rl_vi_arg_digit,
+    '3'    => :rl_vi_arg_digit,
+    '4'    => :rl_vi_arg_digit,
+    '5'    => :rl_vi_arg_digit,
+    '6'    => :rl_vi_arg_digit,
+    '7'    => :rl_vi_arg_digit,
+    '8'    => :rl_vi_arg_digit,
+    '9'    => :rl_vi_arg_digit,
+    ''     => :rl_vi_char_search,
+    '='    => :rl_vi_complete,
+    '?'    => :rl_vi_search,
+    'A'    => :rl_vi_append_eol,
+    'B'    => :rl_vi_prev_word,
+    'C'    => :rl_vi_change_to,
+    'D'    => :rl_vi_delete_to,
+    'E'    => :rl_vi_end_word,
+    'F'    => :rl_vi_char_search,
+    'G'    => :rl_vi_fetch_history,
+    'I'    => :rl_vi_insert_beg,
+    'N'    => :rl_vi_search_again,
+    'P'    => :rl_vi_put,
+    'R'    => :rl_vi_replace,
+    'S'    => :rl_vi_subst,
+    'T'    => :rl_vi_char_search,
+    'U'    => :rl_revert_line,
+    'W'    => :rl_vi_next_word,
+    'X'    => :rl_vi_rubout,
+    'Y'    => :rl_vi_yank_to,
+    '\\'   => :rl_vi_complete,
+    '^'    => :rl_vi_first_print,
+    '_'    => :rl_vi_yank_arg,
+    '`'    => :rl_vi_goto_mark,
+    'a'    => :rl_vi_append_mode,
+    'b'    => :rl_vi_prev_word,
+    'c'    => :rl_vi_change_to,
+    'd'    => :rl_vi_delete_to,
+    'e'    => :rl_vi_end_word,
+    'f'    => :rl_vi_char_search,
+    'h'    => :rl_backward_char,
+    'i'    => :rl_vi_insertion_mode,
+    'j'    => :rl_get_next_history,
+    'k'    => :rl_get_previous_history,
+    'l'    => :rl_forward_char,
+    'm'    => :rl_vi_set_mark,
+    'n'    => :rl_vi_search_again,
+    'p'    => :rl_vi_put,
+    'r'    => :rl_vi_change_char,
+    's'    => :rl_vi_subst,
+    't'    => :rl_vi_char_search,
+    'u'    => :rl_vi_undo,
+    'w'    => :rl_vi_next_word,
+    'x'    => :rl_vi_delete,
+    'y'    => :rl_vi_yank_to,
+    '|'    => :rl_vi_column,
+    '~'    => :rl_vi_change_case
   }
 
   @vi_insertion_keymap = {
-    "\C-a" => :rl_insert,
-    "\C-b" => :rl_insert,
-    "\C-c" => :rl_insert,
-    "\C-d" => :rl_vi_eof_maybe,
-    "\C-e" => :rl_insert,
-    "\C-f" => :rl_insert,
-    "\C-g" => :rl_insert,
-    "\C-h" => :rl_rubout,
-    "\C-i" => :rl_complete,
-    "\C-j" => :rl_newline,
-    "\C-k" => :rl_insert,
-    "\C-l" => :rl_insert,
-    "\C-m" => :rl_newline,
-    "\C-n" => :rl_insert,
-    "\C-o" => :rl_insert,
-    "\C-p" => :rl_insert,
-    "\C-q" => :rl_insert,
-    "\C-r" => :rl_reverse_search_history,
-    "\C-s" => :rl_forward_search_history,
-    "\C-t" => :rl_transpose_chars,
-    "\C-u" => :rl_unix_line_discard,
-    "\C-v" => :rl_quoted_insert,
-    "\C-w" => :rl_unix_word_rubout,
-    "\C-x" => :rl_insert,
-    "\C-y" => :rl_yank,
-    "\C-z" => :rl_insert,
-    "\C-[" => :rl_vi_movement_mode,
+    "\C-a"  => :rl_insert,
+    "\C-b"  => :rl_insert,
+    "\C-c"  => :rl_insert,
+    "\C-d"  => :rl_vi_eof_maybe,
+    "\C-e"  => :rl_insert,
+    "\C-f"  => :rl_insert,
+    "\C-g"  => :rl_insert,
+    "\C-h"  => :rl_rubout,
+    "\C-i"  => :rl_complete,
+    "\C-j"  => :rl_newline,
+    "\C-k"  => :rl_insert,
+    "\C-l"  => :rl_insert,
+    "\C-m"  => :rl_newline,
+    "\C-n"  => :rl_insert,
+    "\C-o"  => :rl_insert,
+    "\C-p"  => :rl_insert,
+    "\C-q"  => :rl_insert,
+    "\C-r"  => :rl_reverse_search_history,
+    "\C-s"  => :rl_forward_search_history,
+    "\C-t"  => :rl_transpose_chars,
+    "\C-u"  => :rl_unix_line_discard,
+    "\C-v"  => :rl_quoted_insert,
+    "\C-w"  => :rl_unix_word_rubout,
+    "\C-x"  => :rl_insert,
+    "\C-y"  => :rl_yank,
+    "\C-z"  => :rl_insert,
+    "\C-["  => :rl_vi_movement_mode,
     "\C-\\" => :rl_insert,
-    "\C-]" => :rl_insert,
-    "\C-^" => :rl_insert,
-    "\C-_" => :rl_vi_undo,
-    "\x7F" => :rl_rubout
+    "\C-]"  => :rl_insert,
+    "\C-^"  => :rl_insert,
+    "\C-_"  => :rl_vi_undo,
+    "\x7F"  => :rl_rubout
   }
 
   @rl_library_version = RL_LIBRARY_VERSION
 
   @rl_readline_version = RL_READLINE_VERSION
 
-  @rl_readline_name = 'other'
+  @rl_readline_name = 'pr-readline'
 
   # Non-zero tells rl_delete_text and rl_insert_text to not add to
   #   the undo list.
@@ -708,7 +723,7 @@ module PrReadline # :nodoc:
   # Temporary value used while generating the argument.
   @rl_arg_sign = 1
 
-  # Non-zero means we have been called at least once before.
+  # true means we have been called at least once before.
   @rl_initialized = false
 
   # Flags word encapsulating the current readline state.
@@ -810,7 +825,7 @@ module PrReadline # :nodoc:
   @rl_num_chars_to_read = 0
 
   # Line buffer and maintenence.
-  @rl_line_buffer = +''
+  @rl_line_buffer = String.new(capacity: DEFAULT_BUFFER_SIZE)
 
   # Key sequence `contexts'
   @_rl_kscxt = nil
@@ -824,24 +839,22 @@ module PrReadline # :nodoc:
   # vi_escape_keymap.
   @_rl_convert_meta_chars_to_ascii = true
 
-  # Non-zero means to output characters with the meta bit set directly rather
-  # than as a meta-prefixed escape sequence.
+  # true means to output characters with the meta bit set directly rather than
+  # as a meta-prefixed escape sequence.
   @_rl_output_meta_chars = false
 
-  # Non-zero means to look at the termios special characters and bind them to
+  # true means to look at the terminal special characters and bind them to
   # equivalent readline functions at startup.
   @_rl_bind_stty_chars = true
 
   @rl_completion_display_matches_hook = nil
 
-  XOK = 1
-
   @_rl_term_clreol = nil
   @_rl_term_clrpag = nil
   @_rl_term_cr = nil
   @_rl_term_backspace = nil
-  @_rl_term_goto = nil
-  @_rl_term_pc = nil
+  @_rl_term_goto = nil # TODO: what is this?
+  @_rl_term_pad = nil
 
   # "An application program can assume that the terminal can do character
   # insertion if *any one of* the capabilities `IC', `im', `ic' or `ip' is
@@ -852,15 +865,15 @@ module PrReadline # :nodoc:
   @_rl_terminal_can_insert = false
 
   # How to insert characters.
-  @_rl_term_im = nil
-  @_rl_term_ei = nil
-  @_rl_term_ic = nil
+  @_rl_term_smir = nil
+  @_rl_term_rmir = nil
+  @_rl_term_ich1 = nil
   @_rl_term_ip = nil
-  @_rl_term_IC = nil
+  @_rl_term_ich = nil
 
   # How to delete characters.
-  @_rl_term_dc = nil
-  @_rl_term_DC = nil
+  @_rl_term_dch1 = nil
+  @_rl_term_dch = nil
 
   @_rl_term_forward_char = nil
 
@@ -878,41 +891,55 @@ module PrReadline # :nodoc:
 
   # The sequences to write to turn on and off the meta key, if this terminal
   # has one.
-  @_rl_term_mm = nil
-  @_rl_term_mo = nil
+  @_rl_term_smm = nil
+  @_rl_term_rmm = nil
 
   # The key sequences output by the arrow keys, if this terminal has any.
-  @_rl_term_ku = nil
-  @_rl_term_kd = nil
-  @_rl_term_kr = nil
-  @_rl_term_kl = nil
+  @_rl_term_kcuu1 = nil
+  @_rl_term_kcud1 = nil
+  @_rl_term_kcuf1 = nil
+  @_rl_term_kcub1 = nil
 
   # How to initialize and reset the arrow keys, if this terminal has any.
-  @_rl_term_ks = nil
-  @_rl_term_ke = nil
+  @_rl_term_smkx = nil
+  @_rl_term_rmkx = nil
 
   # The key sequences sent by the Home and End keys, if any.
-  @_rl_term_kh = nil
-  @_rl_term_kH = nil
-  @_rl_term_at7 = nil
+  @_rl_term_khome = nil
+  @_rl_term_kll = nil
+  @_rl_term_kend = nil
 
   # Delete key
-  @_rl_term_kD = nil
+  @_rl_term_kdch1 = nil
 
   # Insert key
-  @_rl_term_kI = nil
+  @_rl_term_kich1 = nil
 
   # Cursor control
-  @_rl_term_vs = nil    # very visible
-  @_rl_term_ve = nil    # normal
+  @_rl_term_cvvis = nil # very visible
+  @_rl_term_cnorm = nil # normal
 
   # Variables that hold the screen dimensions, used by the display code.
   @_rl_screenwidth = @_rl_screenheight = @_rl_screenchars = 0
 
-  # Non-zero means the user wants to enable the keypad.
+  # If true, then values of LINES and # COLUMNS from the environment will be
+  # preferred over the values from the operating system when computing the
+  # screen dimensions.
+  @rl_prefer_env_winsize = false
+
+  def rl_prefer_env_winsize=(val)
+    @rl_prefer_env_winsize =
+      if val.is_a?(TrueClass) || val.is_a?(FalseClass)
+        val
+      else
+        !(val.nil? || (val.is_a?(Numeric) && val.zero?))
+      end
+  end
+
+  # true means the user wants to enable the keypad.
   @_rl_enable_keypad = false
 
-  # Non-zero means the user wants to enable a meta key.
+  # true means the user wants to enable a meta key.
   @_rl_enable_meta = true
 
   # ****************************************************************
@@ -1130,9 +1157,7 @@ module PrReadline # :nodoc:
   @current_readline_init_include_level = 0
   @current_readline_init_lineno = 0
 
-  unless File.directory? Dir.home
-    raise "HOME directory (#{Dir.home}) must be a directory"
-  end
+  @_init_files = Set.new
 
   @directory = nil
   @filename = nil
@@ -1146,6 +1171,7 @@ module PrReadline # :nodoc:
                 :rl_attempted_completion_over,
                 :rl_basic_quote_characters,
                 :rl_basic_word_break_characters,
+                :rl_change_environment,
                 :rl_completer_quote_characters,
                 :rl_completer_word_break_characters,
                 :rl_completion_append_character,
@@ -1555,7 +1581,7 @@ module PrReadline # :nodoc:
   end
 
   # Clean up the terminal and readline state after catching a signal, before
-  #   resending it to the calling application.
+  # resending it to the calling application.
   def rl_cleanup_after_signal
     _rl_clean_up_for_exit
     send(@rl_deprep_term_function) if @rl_deprep_term_function
@@ -1859,136 +1885,69 @@ module PrReadline # :nodoc:
     0
   end
 
-  def get_term_capabilities(_buffer)
-    hash = {}
-    # TODO: clean this up
-    # rubocop:disable Style/PerlBackrefs
-    # rubocop:disable Layout/LineLength
-    # rubocop:disable Style/CharacterLiteral
-    # rubocop:disable Performance/RangeInclude
-    `infocmp -C`.split(':').select { |x| x =~ /(.*)=(.*)/ and hash[$1] = $2.gsub('\\r', "\r").gsub('\\E', "\e").gsub(/\^(.)/) { ($1[0].ord ^ ((?a..?z).include?($1[0]) ? 0x60 : 0x40)).chr } }
-    # rubocop:enable Performance/RangeInclude
-    # rubocop:enable Style/CharacterLiteral
-    # rubocop:enable Layout/LineLength
-    # rubocop:enable Style/PerlBackrefs
+  def term_capabilities(load_for_real: true)
+    return if @tinfo_initialized
 
-    @_rl_term_at7          =     hash['@7']
-    @_rl_term_DC           =     hash['DC']
-    @_rl_term_IC           =     hash['IC']
-    @_rl_term_clreol       =     hash['ce']
-    @_rl_term_clrpag       =     hash['cl']
-    @_rl_term_cr           =     hash['cr']
-    @_rl_term_dc           =     hash['dc']
-    @_rl_term_ei           =     hash['ei']
-    @_rl_term_ic           =     hash['ic']
-    @_rl_term_im           =     hash['im']
-    @_rl_term_kD           =     hash['kD']
-    @_rl_term_kH           =     hash['kH']
-    @_rl_term_kI           =     hash['kI']
-    @_rl_term_kd           =     hash['kd']
-    @_rl_term_ke           =     hash['ke']
-    @_rl_term_kh           =     hash['kh']
-    @_rl_term_kl           =     hash['kl']
-    @_rl_term_kr           =     hash['kr']
-    @_rl_term_ks           =     hash['ks']
-    @_rl_term_ku           =     hash['ku']
-    @_rl_term_backspace    =     hash['le']
-    @_rl_term_mm           =     hash['mm']
-    @_rl_term_mo           =     hash['mo']
-    @_rl_term_forward_char =     hash['nd']
-    @_rl_term_pc           =     hash['pc']
-    @_rl_term_up           =     hash['up']
-    @_rl_visible_bell      =     hash['vb']
-    @_rl_term_vs           =     hash['vs']
-    @_rl_term_ve           =     hash['ve']
-
-    @tcap_initialized = true
-  end
-
-  # Set the environment variables LINES and COLUMNS to lines and cols,
-  #   respectively.
-  def sh_set_lines_and_columns(lines, cols)
-    ENV['LINES'] = lines.to_s
-    ENV['COLUMNS'] = cols.to_s
-  end
-
-  # Get readline's idea of the screen size.  TTY is a file descriptor open
-  #   to the terminal.  If IGNORE_ENV is true, we do not pay attention to the
-  #   values of $LINES and $COLUMNS.  The tests for TERM_STRING_BUFFER being
-  #   non-null serve to check whether or not we have initialized termcap.
-  def _rl_get_screen_size(_tty, ignore_env)
-    if @hConsoleHandle
-      csbi = Fiddle::Pointer.malloc(24)
-      @GetConsoleScreenBufferInfo.Call(@hConsoleHandle, csbi)
-      wc, wr = csbi[0, 4].unpack('SS')
-      # wr,wc, = `mode con`.scan(/\d+\n/).map{|x| x.to_i}
-      @_rl_screenwidth = wc
-      @_rl_screenheight = wr
+    if load_for_real
+      load_capabilities('boolean', Terminfo.method(:tigetflag), false)
+      load_capabilities('numeric', Terminfo.method(:tigetnum), -1)
+      load_capabilities('string', Terminfo.method(:tigetstr), nil)
     else
-      wr, wc = 0
-
-      retry_if_interrupted do
-        wr, wc = `stty size`.split.map(&:to_i)
-      end
-
-      @_rl_screenwidth = wc
-      @_rl_screenheight = wr
-
-      @_rl_screenheight = ENV['LINES'].to_i if ignore_env.zero? && ENV['LINES']
-
-      if ignore_env.zero? && ENV['COLUMNS']
-        @_rl_screenwidth = ENV['COLUMNS'].to_i
-      end
+      load_capabilities('boolean', nil, false)
+      load_capabilities('numeric', nil, -1)
+      load_capabilities('string', nil, nil)
     end
 
-    # If all else fails, default to 80x24 terminal.
-    @_rl_screenwidth = 80 if @_rl_screenwidth.nil? || @_rl_screenwidth <= 1
-    @_rl_screenheight = 24 if @_rl_screenheight.nil? || @_rl_screenheight <= 0
+    @tinfo_initialized = true
+  end
 
-    # If we're being compiled as part of bash, set the environment
-    #   variables $LINES and $COLUMNS to new values.  Otherwise, just
-    #   do a pair of putenv () or setenv () calls.
-    sh_set_lines_and_columns(@_rl_screenheight, @_rl_screenwidth)
+  # Get readline's idea of the screen size.  TTY is a file descriptor open to
+  # the terminal.  If IGNORE_ENV is true, we do not pay attention to the
+  # values of $LINES and $COLUMNS.
+  def _rl_get_screen_size(tty, ignore_env)
+    @_rl_screenheight, @_rl_screenwidth =
+      Screen.size(tty, ignore_env: ignore_env,
+                  prefer_env: @rl_prefer_env_winsize)
+
+    if @rl_change_environment
+      ENV['ROWS'] = ENV['LINES'] = @_rl_screenheight.to_s
+      ENV['COLUMSN'] = @_rl_screenwidth.to_s
+    end
 
     @_rl_screenwidth -= 1 unless @_rl_term_autowrap
-
     @_rl_screenchars = @_rl_screenwidth * @_rl_screenheight
   end
 
-  def tgetflag(name)
-    `infocmp -C -r`.scan(/\w{2}/).include?(name)
-  end
-
   # Return the function (or macro) definition which would be invoked via
-  #   KEYSEQ if executed in MAP.  If MAP is NULL, then the current keymap is
-  #   used.  TYPE, if non-NULL, is a pointer to an int which will receive the
-  #   type of the object pointed to.  One of ISFUNC (function), ISKMAP
-  #   (keymap), or ISMACR (macro).
+  # KEYSEQ if executed in MAP.  If MAP is NULL, then the current keymap is
+  # used.  TYPE, if non-NULL, is a pointer to an int which will receive the
+  # type of the object pointed to.  One of ISFUNC (function), ISKMAP (keymap),
+  # or ISMACR (macro).
   def rl_function_of_keyseq(keyseq, map, _type)
     map ||= @_rl_keymap
     map[keyseq]
   end
 
   # Bind the key sequence represented by the string KEYSEQ to the arbitrary
-  #   pointer DATA.  TYPE says what kind of data is pointed to by DATA, right
-  #   now this can be a function (ISFUNC), a macro (ISMACR), or a keymap
-  #   (ISKMAP).  This makes new keymaps as necessary.  The initial place to do
-  #   bindings is in MAP.
+  # pointer DATA.  TYPE says what kind of data is pointed to by DATA, right
+  # now this can be a function (ISFUNC), a macro (ISMACR), or a keymap
+  # (ISKMAP).  This makes new keymaps as necessary.  The initial place to do
+  # bindings is in MAP.
   def rl_generic_bind(_type, keyseq, data, map)
     map[keyseq] = data
     0
   end
 
   # Bind the key sequence represented by the string KEYSEQ to FUNCTION.  This
-  #   makes new keymaps as necessary.  The initial place to do bindings is in
-  #   MAP.
+  # makes new keymaps as necessary.  The initial place to do bindings is in
+  # MAP.
   def rl_bind_keyseq_in_map(keyseq, function, map)
     rl_generic_bind(ISFUNC, keyseq, function, map)
   end
 
-  # Bind key sequence KEYSEQ to DEFAULT_FUNC if KEYSEQ is unbound.  Right
-  #   now, this is always used to attempt to bind the arrow keys, hence the
-  #   check for rl_vi_movement_mode.
+  # Bind key sequence KEYSEQ to DEFAULT_FUNC if KEYSEQ is unbound.  Right now,
+  # this is always used to attempt to bind the arrow keys, hence the check for
+  # rl_vi_movement_mode.
   def rl_bind_keyseq_if_unbound_in_map(keyseq, default_func, kmap)
     return 0 unless keyseq
 
@@ -2005,131 +1964,114 @@ module PrReadline # :nodoc:
     rl_bind_keyseq_if_unbound_in_map(keyseq, default_func, @_rl_keymap)
   end
 
-  # Bind the arrow key sequences from the termcap description in MAP.
-  def bind_termcap_arrow_keys(map)
+  # Bind the arrow key sequences from the terminfo description in MAP.
+  def bind_terminfo_arrow_keys(map)
     xkeymap = @_rl_keymap
     @_rl_keymap = map
 
-    rl_bind_keyseq_if_unbound(@_rl_term_ku, :rl_get_previous_history)
-    rl_bind_keyseq_if_unbound(@_rl_term_kd, :rl_get_next_history)
-    rl_bind_keyseq_if_unbound(@_rl_term_kr, :rl_forward_char)
-    rl_bind_keyseq_if_unbound(@_rl_term_kl, :rl_backward_char)
+    rl_bind_keyseq_if_unbound(@_rl_term_kcuu1, :rl_get_previous_history)
+    rl_bind_keyseq_if_unbound(@_rl_term_kcud1, :rl_get_next_history)
+    rl_bind_keyseq_if_unbound(@_rl_term_kcuf1, :rl_forward_char)
+    rl_bind_keyseq_if_unbound(@_rl_term_kcub1, :rl_backward_char)
 
-    rl_bind_keyseq_if_unbound(@_rl_term_kh, :rl_beg_of_line) # Home
-    rl_bind_keyseq_if_unbound(@_rl_term_at7, :rl_end_of_line) # End
+    rl_bind_keyseq_if_unbound(@_rl_term_khome, :rl_beg_of_line)
+    rl_bind_keyseq_if_unbound(@_rl_term_kend, :rl_end_of_line)
 
-    rl_bind_keyseq_if_unbound(@_rl_term_kD, :rl_delete)
-    rl_bind_keyseq_if_unbound(@_rl_term_kI, :rl_overwrite_mode)
+    rl_bind_keyseq_if_unbound(@_rl_term_kdch1, :rl_delete)
+    rl_bind_keyseq_if_unbound(@_rl_term_kich1, :rl_overwrite_mode)
 
     @_rl_keymap = xkeymap
   end
 
   def _rl_init_terminal_io(terminal_name)
-    term = terminal_name || ENV.fetch('TERM', 'dumb')
-    @_rl_term_clrpag = @_rl_term_cr = @_rl_term_clreol = nil
-    tty = @rl_instream ? @rl_instream.fileno : 0
+    return true if @terminal_io_initialized
 
-    if no_terminal?
+    term = terminal_name || ENV.fetch('TERM', nil)
+
+    @terminal_io_initialize = true
+
+    @_rl_term_clrpag = @_rl_term_cr = @_rl_term_clreol = nil
+    @_rl_term_clrscroll = nil
+
+    tty = @rl_instream || $stdin
+
+    begin
+      Terminfo.setupterm(term, @rl_outstream.fileno)
+    rescue TerminfoError => e
+      warn e
       term = 'dumb'
-      @_rl_bind_stty_chars = false
     end
 
-    @term_string_buffer ||= NUL_CHAR * 2032
-
-    @term_buffer ||= NUL_CHAR * 4080
-
-    buffer = @term_string_buffer
-
-    tgetent_ret = (term != 'dumb') ? 1 : -1
-
-    if tgetent_ret.negative?
-      buffer = @term_buffer = @term_string_buffer = nil
-
-      @_rl_term_autowrap = false # used by _rl_get_screen_size
-
+    if term == 'dumb'
       # Allow calling application to set default height and width, using
       # rl_set_screen_size
       if @_rl_screenwidth <= 0 || @_rl_screenheight <= 0
-        _rl_get_screen_size(tty, 0)
+        _rl_get_screen_size(tty, false)
       end
 
       # Defaults.
       if @_rl_screenwidth <= 0 || @_rl_screenheight <= 0
-        @_rl_screenwidth = 79
-        @_rl_screenheight = 24
+        @_rl_screenheight, @_rl_screenwidth = Screen.default_size
       end
+
+      # load all terminfo capabilities using default values (i.e. "fake load")
+      term_capabilities(load_for_real: false)
 
       # Everything below here is used by the redisplay code (tputs).
       @_rl_screenchars = @_rl_screenwidth * @_rl_screenheight
       @_rl_term_cr = "\r"
-      @_rl_term_im = @_rl_term_ei = @_rl_term_ic = @_rl_term_IC = nil
-      @_rl_term_up = @_rl_term_dc = @_rl_term_DC = @_rl_visible_bell = nil
-      @_rl_term_ku = @_rl_term_kd = @_rl_term_kl = @_rl_term_kr = nil
-      @_rl_term_kh = @_rl_term_kH = @_rl_term_kI = @_rl_term_kD = nil
-      @_rl_term_ks = @_rl_term_ke = @_rl_term_at7 = nil
-      @_rl_term_mm = @_rl_term_mo = nil
-      @_rl_term_ve = @_rl_term_vs = nil
-      @_rl_term_forward_char = nil
-      @_rl_terminal_can_insert = @term_has_meta = false
-
-      # Reasonable defaults for tgoto().  Readline currently only uses
-      #   tgoto if _rl_term_IC or _rl_term_DC is defined, but just in case we
-      #   change that later...
       @_rl_term_backspace = "\b"
+      @_rl_terminal_can_insert = @term_has_meta = false
+      @_rl_term_autowrap = false
 
-      return 0
+      # TODO: Reasonable defaults for tgoto().  Readline currently only uses
+      # tgoto if _rl_term_IC or _rl_term_DC is defined, but just in case we
+      # change that later...
+
+      return true
     end
 
-    get_term_capabilities(buffer)
+    term_capabilities(load_for_real: true)
 
     @_rl_term_cr ||= "\r"
-    # rubocop:disable Style/DoubleNegation
-    @_rl_term_autowrap = !!(tgetflag('am') && tgetflag('xn')) # TODO: correct?
-    # rubocop:enable Style/DoubleNegation
+    @_rl_term_autowrap = @_rl_term_am && @_rl_term_xenl
 
     # Allow calling application to set default height and width, using
-    #   rl_set_screen_size
+    # rl_set_screen_size
     if @_rl_screenwidth <= 0 || @_rl_screenheight <= 0
-      _rl_get_screen_size(tty, 0)
+      _rl_get_screen_size(tty, false)
     end
 
     # Check to see if this terminal has a meta key and clear the capability
-    #   variables if there is none.
-    # rubocop:disable Style/DoubleNegation
-    @term_has_meta = !!(tgetflag('km') || tgetflag('MT')) # TODO: correct?
-    # rubocop:enable Style/DoubleNegation
-    @_rl_term_mm = @_rl_term_mo = nil unless @term_has_meta
+    # variables if there is none.
+    @term_has_meta = @_rl_term_km
+    @_rl_term_rmm = @_rl_term_smm = nil unless @term_has_meta
 
-    # Attempt to find and bind the arrow keys.  Do not override already
-    #   bound keys in an overzealous attempt, however.
+    # Attempt to find and bind the arrow keys. Do not override already bound
+    # keys!
 
-    bind_termcap_arrow_keys(@emacs_standard_keymap)
-
-    bind_termcap_arrow_keys(@vi_movement_keymap)
-    bind_termcap_arrow_keys(@vi_insertion_keymap)
+    bind_terminfo_arrow_keys(@emacs_standard_keymap)
+    bind_terminfo_arrow_keys(@vi_movement_keymap)
+    bind_terminfo_arrow_keys(@vi_insertion_keymap)
 
     0
   end
 
   # New public way to set the system default editing chars to their readline
-  #   equivalents.
+  # equivalents.
   def rl_tty_set_default_bindings(kmap)
-    h = {}
+    h = `stty -a 2>/dev/null`.scan(/(\w+) = ([^;]+);/).to_h
 
-    retry_if_interrupted do
-      h = Hash[*`stty -a`.scan(/(\w+) = ([^;]+);/).flatten]
+    h.each do |_k, v|
+      v.gsub!(/\^([?A-Za-z])/) do
+        if Regexp.last_match(1) == '?'
+          127.chr
+        else
+          c = Regexp.last_match(1)[0]
+          (c.ord ^ (('a'..'z').cover?(c) ? 0x60 : 0x40)).chr
+        end
+      end
     end
-
-    # TODO: clean this up
-    # rubocop:disable Style/PerlBackrefs
-    # rubocop:disable Style/CharacterLiteral
-    # rubocop:disable Performance/RangeInclude
-    # rubocop:disable Layout/LineLength
-    h.each { |_k, v| v.gsub!(/\^(.)/) { ($1[0].ord ^ ((?a..?z).include?($1[0]) ? 0x60 : 0x40)).chr } }
-    # rubocop:enable Layout/LineLength
-    # rubocop:enable Performance/RangeInclude
-    # rubocop:enable Style/CharacterLiteral
-    # rubocop:enable Style/PerlBackrefs
 
     kmap[h['erase']] = :rl_rubout
     kmap[h['kill']] = :rl_unix_line_discard
@@ -2137,9 +2079,9 @@ module PrReadline # :nodoc:
     kmap[h['lnext']] = :rl_quoted_insert
   end
 
-  # If this system allows us to look at the values of the regular
-  #   input editing characters, then bind them to their readline
-  #   equivalents, iff the characters are not bound to keymaps.
+  # If this system allows us to look at the values of the regular input
+  # editing characters, then bind them to their readline equivalents, iff the
+  # characters are not bound to keymaps.
   def readline_default_bindings
     rl_tty_set_default_bindings(@_rl_keymap) if @_rl_bind_stty_chars
   end
@@ -2157,26 +2099,16 @@ module PrReadline # :nodoc:
   # If the file existed and could be opened and read, 0 is returned, otherwise
   # errno is returned.
   def rl_read_init_file(filename)
-    # Default the filename.
-    filename ||= @last_readline_init_file
-    filename ||= ENV.fetch('INPUTRC', nil)
+    filename = filename.strip unless filename.nil?
+    filename = @last_readline_init_file if filename.nil? || filename.empty?
+    filename = ENV.fetch('INPUTRC', '') if filename.nil? || filename.empty?
+    filename = DEFAULT_INPUTRC if filename.nil? || filename.empty?
+    filename = filename.strip
 
-    if filename.nil? || filename.empty?
-      filename = DEFAULT_INPUTRC
+    return true if !filename.empty? && _rl_read_init_file(filename, 0)
+    return true if windows? && _rl_read_init_file('~/_inputrc', 0)
 
-      # Try to read DEFAULT_INPUTRC; fall back to SYS_INPUTRC on failure
-      return true if _rl_read_init_file(filename, 0)
-
-      filename = SYS_INPUTRC
-    end
-
-    if RUBY_PLATFORM.match?(/mswin|mingw/i)
-      return true if _rl_read_init_file(filename, 0)
-
-      filename = '~/_inputrc'
-    end
-
-    _rl_read_init_file(filename, 0)
+    _rl_read_init_file(SYS_INPUTRC, 0)
   end
 
   def _rl_read_init_file(filename, include_level)
@@ -2185,14 +2117,24 @@ module PrReadline # :nodoc:
 
     openname = File.expand_path(filename)
 
+    if @_init_files.include?(openname)
+      warn "readline: #{filename}: already read or circular include"
+      return false
+    end
+
+    @_init_files.add(openname)
+
     begin
       if File.size(openname) > 1_000_000
-        warn "readline: #{filename}: unreasonably large, ignoring it"
+        warn "readline: #{filename}: unreasonably large, try again"
         return false
       end
 
       buffer = File.read(openname, mode: 'rt')
+    rescue Errno::ENOENT
+      return false
     rescue SystemCallError
+      warn "readline: #{filename}: read failed"
       return false
     end
 
@@ -2213,8 +2155,13 @@ module PrReadline # :nodoc:
       return false unless rl_parse_and_bind(line)
     end
 
+    true
+  ensure
     @currently_reading_init_file = false
-    0
+    @current_readline_init_file = nil
+    @current_readline_init_lineno = 0
+    @current_readline_init_include_level = 0
+    @_init_files.delete(openname) if openname
   end
 
   # Push _rl_parsing_conditionalized_out, and set parser state based on ARGS.
@@ -2223,22 +2170,22 @@ module PrReadline # :nodoc:
     @if_stack << @_rl_parsing_conditionalized_out
 
     # If parsing is turned off, then nothing can turn it back on except for
-    #   finding the matching endif.  In that case, return right now.
+    # finding the matching endif.  In that case, return right now.
     return 0 if @_rl_parsing_conditionalized_out
 
     args.downcase!
 
     # Handle "$if term=foo" and "$if mode=emacs" constructs.  If this isn't
-    #   term=foo, or mode=emacs, then check to see if the first word in ARGS
-    #   is the same as the value stored in rl_readline_name.
+    # term=foo, or mode=emacs, then check to see if the first word in ARGS is
+    # the same as the value stored in rl_readline_name.
     if @rl_terminal_name && args =~ /^term=/
       # Terminals like "aaa-60" are equivalent to "aaa".
       tname = @rl_terminal_name.downcase.gsub(/-.*$/, '')
 
-      # Test the `long' and `short' forms of the terminal name so that
-      # if someone has a `sun-cmd' and does not want to have bindings
-      # that will be executed if the terminal is a `sun', they can put
-      # `$if term=sun-cmd' into their .inputrc.
+      # Test the `long' and `short' forms of the terminal name so that if
+      # someone has a `sun-cmd' and does not want to have bindings that will
+      # be executed if the terminal is a `sun', they can put `$if
+      # term=sun-cmd' into their .inputrc.
       @_rl_parsing_conditionalized_out = \
         (args[5..] != tname && args[5..] != @rl_terminal_name.downcase)
     elsif args.match?(/^mode=/)
@@ -2254,7 +2201,7 @@ module PrReadline # :nodoc:
       @_rl_parsing_conditionalized_out = (mode != @rl_editing_mode)
 
       # Check to see if the first word in ARGS is the same as the value stored
-      #   in rl_readline_name.
+      # in rl_readline_name.
     else
       @_rl_parsing_conditionalized_out = args == @rl_readline_name
     end
@@ -2270,8 +2217,8 @@ module PrReadline # :nodoc:
                      @current_readline_init_lineno)
     end
 
-    print format(fmt, *args)
-    print "\n"
+    $stderr.print format(fmt, *args)
+    $stderr.print "\n"
     $stderr.flush
     false
   end
@@ -2309,12 +2256,14 @@ module PrReadline # :nodoc:
     old_init_file = @current_readline_init_file
     old_line_number = @current_readline_init_lineno
     old_include_level = @current_readline_init_include_level
+    old_reading = @currently_reading_init_file
 
     r = _rl_read_init_file(args, old_include_level + 1)
 
     @current_readline_init_file = old_init_file
     @current_readline_init_lineno = old_line_number
     @current_readline_init_include_level = old_include_level
+    @currently_reading_init_file = old_reading
 
     r
   end
@@ -2381,13 +2330,13 @@ module PrReadline # :nodoc:
   end
 
   def sv_compwidth(value)
-    @_rl_completion_columns = if value.nil? || value.empty?
+    @_rl_completion_columns = if value.nil? || value.strip.empty?
                                 -1
                               else
-                                Integer(value)
+                                Integer(value.strip)
                               end
     true
-  rescue ArgumentError
+  rescue ArgumentError, FloatDomainError, Math::DomainError
     false
   end
 
@@ -2396,10 +2345,10 @@ module PrReadline # :nodoc:
   end
 
   def sv_dispprefix(value)
-    ival = (value.nil? || value.empty?) ? 0 : Integer(value)
+    ival = (value.nil? || value.strip.empty?) ? 0 : Integer(value.strip)
     @_rl_completion_prefix_display_length = ival.negative? ? 0 : ival
     true
-  rescue ArgumentError
+  rescue ArgumentError, FloatDomainError, Math::DomainError
     false
   end
 
@@ -2408,10 +2357,10 @@ module PrReadline # :nodoc:
   end
 
   def sv_compquery(value)
-    ival = (value.nil? || value.empty?) ? 100 : Integer(value)
+    ival = (value.nil? || value.strip.empty?) ? 100 : Integer(value.strip)
     @rl_completion_query_items = ival.negative? ? 0 : ival
     true
-  rescue ArgumentError
+  rescue ArgumentError, FloatDomainError, Math::DomainError
     false
   end
 
@@ -2462,10 +2411,10 @@ module PrReadline # :nodoc:
   end
 
   def sv_histsize(value)
-    ival = (value.nil? || value.empty?) ? 500 : Integer(value)
+    ival = (value.nil? || value.strip.empty?) ? 500 : Integer(value.strip)
     ival.negative? ? unstifle_history(ival) : stifle_history(ival)
     true
-  rescue ArgumentError
+  rescue ArgumentError, FloatDomainError, Math::DomainError
     false
   end
 
@@ -2480,7 +2429,7 @@ module PrReadline # :nodoc:
           # get the quoted string (without the quotes)
           d = value[0]
           value =~ /\A#{d}([^#{d}]+)#{d}/
-          Regexp.latest_match(1)
+          Regexp.last_match(1)
         else
           # get everything up to the first white space
           value.sub(/\s.*\z/, '')
@@ -2509,10 +2458,10 @@ module PrReadline # :nodoc:
   end
 
   def sv_seqtimeout(value)
-    ival = (value.nil? || value.empty?) ? 0 : Integer(value)
+    ival = (value.nil? || value.strip.empty?) ? 0 : Integer(value.strip)
     @_rl_keyseq_timeout = ival.negative? ? 0 : ival
     true
-  rescue ArgumentError
+  rescue ArgumentError, FloatDomainError, Math::DomainError
     false
   end
 
@@ -2559,73 +2508,88 @@ module PrReadline # :nodoc:
   end
 
   BOOLEAN_VARIABLES = {
-    'bind-tty-special-chars' => '@_rl_bind_stty_chars',
-    'blink-matching-paren' => '@rl_blink_matching_pare',
-    'byte-oriented' => '@rl_byte_oriente',
-    'colored-completion-prefix' => '@_rl_colored_completion_prefi',
-    'colored-stats' => '@_rl_colored_stat',
-    'completion-ignore-case' => '@_rl_completion_case_fol',
-    'completion-map-case' => '@_rl_completion_case_ma',
-    'convert-meta' => '@_rl_convert_meta_chars_to_asci',
-    'disable-completion' => '@rl_inhibit_completio',
-    'echo-control-characters' => '@_rl_echo_control_char',
-    'enable-bracketed-paste' => '@_rl_enable_bracketed_past',
-    'enable-keypad' => '@_rl_enable_keypa',
-    'enable-meta-key' => '@_rl_enable_met',
-    'expand-tilde' => '@rl_complete_with_tilde_expansio',
-    'history-preserve-point' => '@_rl_history_preserve_poin',
-    'horizontal-scroll-mode' => '@_rl_horizontal_scroll_mod',
-    'input-meta' => '@_rl_meta_fla',
-    'mark-directories' => '@_rl_complete_mark_directorie',
-    'mark-modified-lines' => '@_rl_mark_modified_line',
-    'mark-symlinked-directories' => '@_rl_complete_mark_symlink_dir',
-    'match-hidden-files' => '@_rl_match_hidden_file',
-    'menu-complete-display-prefix' => '@_rl_menu_complete_prefix_firs',
-    'meta-flag' => '@_rl_meta_fla',
-    'output-meta' => '@_rl_output_meta_char',
-    'page-completions' => '@_rl_page_completion',
-    'prefer-visible-bell' => '@_rl_prefer_visible_bel',
+    'bind-tty-special-chars'         => '@_rl_bind_stty_chars',
+    'blink-matching-paren'           => '@rl_blink_matching_pare',
+    'byte-oriented'                  => '@rl_byte_oriente',
+    'colored-completion-prefix'      => '@_rl_colored_completion_prefi',
+    'colored-stats'                  => '@_rl_colored_stat',
+    'completion-ignore-case'         => '@_rl_completion_case_fol',
+    'completion-map-case'            => '@_rl_completion_case_ma',
+    'convert-meta'                   => '@_rl_convert_meta_chars_to_asci',
+    'disable-completion'             => '@rl_inhibit_completio',
+    'echo-control-characters'        => '@_rl_echo_control_char',
+    'enable-bracketed-paste'         => '@_rl_enable_bracketed_past',
+    'enable-keypad'                  => '@_rl_enable_keypa',
+    'enable-meta-key'                => '@_rl_enable_met',
+    'expand-tilde'                   => '@rl_complete_with_tilde_expansio',
+    'history-preserve-point'         => '@_rl_history_preserve_poin',
+    'horizontal-scroll-mode'         => '@_rl_horizontal_scroll_mod',
+    'input-meta'                     => '@_rl_meta_fla',
+    'mark-directories'               => '@_rl_complete_mark_directorie',
+    'mark-modified-lines'            => '@_rl_mark_modified_line',
+    'mark-symlinked-directories'     => '@_rl_complete_mark_symlink_dir',
+    'match-hidden-files'             => '@_rl_match_hidden_file',
+    'menu-complete-display-prefix'   => '@_rl_menu_complete_prefix_firs',
+    'meta-flag'                      => '@_rl_meta_fla',
+    'output-meta'                    => '@_rl_output_meta_char',
+    'page-completions'               => '@_rl_page_completion',
+    'prefer-visible-bell'            => '@_rl_prefer_visible_bel',
     'print-completions-horizontally' => '@_rl_print_completions_horizontall',
-    'revert-all-at-newline' => '@_rl_revert_all_at_newlin',
-    'show-all-if-ambiguous' => '@_rl_complete_show_al',
-    'show-all-if-unmodified' => '@_rl_complete_show_unmodifie',
-    'show-mode-in-prompt' => '@_rl_show_mode_in_promp',
-    'skip-completed-text' => '@_rl_skip_completed_tex',
-    'visible-stats' => '@rl_visible_stats'
+    'revert-all-at-newline'          => '@_rl_revert_all_at_newlin',
+    'show-all-if-ambiguous'          => '@_rl_complete_show_al',
+    'show-all-if-unmodified'         => '@_rl_complete_show_unmodifie',
+    'show-mode-in-prompt'            => '@_rl_show_mode_in_promp',
+    'skip-completed-text'            => '@_rl_skip_completed_tex',
+    'visible-stats'                  => '@rl_visible_stats'
   }.freeze
 
+  # rubocop:disable Layout/HashAlignment
   STRING_VARIABLES = {
-    'bell-style' => [method(:sv_bell_style), method(:gv_bell_style)],
-    'comment-begin' => [method(:sv_combegin), method(:gv_combegin)],
-    'completion-display-width' => [method(:sv_compwidth),
-                                   method(:gv_compwidth)],
+    'bell-style' =>
+      [method(:sv_bell_style), method(:gv_bell_style)],
+    'comment-begin' =>
+      [method(:sv_combegin), method(:gv_combegin)],
+    'completion-display-width' =>
+      [method(:sv_compwidth), method(:gv_compwidth)],
     'completion-prefix-display-length' =>
       [method(:sv_dispprefix), method(:gv_dispprefix)],
-    'completion-query-items' => [method(:sv_compquery), method(:gv_compquery)],
-    'editing-mode' => [method(:sv_editmode), method(:gv_editmode)],
-    'emacs-mode-string' => [method(:sv_emacs_modestr),
-                            method(:gv_emacs_modestr)],
-    'history-size' => [method(:sv_histsize), method(:gv_histsize)],
-    'isearch-terminators' => [method(:sv_isrchterm), method(:gv_isrchterm)],
-    'keymap' => [method(:sv_keymap), method(:gv_keymap)],
-    'keyseq-timeout' => [method(:sv_seqtimeout), method(:gv_seqtimeout)],
-    'vi-cmd-mode-string' => [method(:sv_vicmd_modestr),
-                             method(:gv_vicmd_modestr)],
-    'vi-ins-mode-string' => [method(:sv_viins_modestr),
-                             method(:gv_viins_modestr)]
+    'completion-query-items' =>
+      [method(:sv_compquery), method(:gv_compquery)],
+    'editing-mode' =>
+      [method(:sv_editmode), method(:gv_editmode)],
+    'emacs-mode-string' =>
+      [method(:sv_emacs_modestr), method(:gv_emacs_modestr)],
+    'history-size' =>
+      [method(:sv_histsize), method(:gv_histsize)],
+    'isearch-terminators' =>
+      [method(:sv_isrchterm), method(:gv_isrchterm)],
+    'keymap' =>
+      [method(:sv_keymap), method(:gv_keymap)],
+    'keyseq-timeout' =>
+      [method(:sv_seqtimeout), method(:gv_seqtimeout)],
+    'vi-cmd-mode-string' =>
+      [method(:sv_vicmd_modestr), method(:gv_vicmd_modestr)],
+    'vi-ins-mode-string' =>
+      [method(:sv_viins_modestr), method(:gv_viins_modestr)]
   }.freeze
+  # rubocop Layout/HashAlignment: EnforcedHashRocketStyle: table
+
+  def value_to_boolean(value)
+    value.nil? || value.empty? || value == '1' || value.casecmp('on').zero?
+  end
 
   # TODO: This should be returning success/failure
   def rl_variable_bind(name, value)
     name = name.downcase
-    value = value.downcase unless value.nil?
+    value = value.downcase unless value.nil? # TODO: verify this
 
     bv = BOOLEAN_VARIABLES[name]
 
     if bv
-      on_off = value.nil? || value.empty? || value == '1' || value == 'on'
+      on_off = value_to_boolean(value)
+
       if instance_variable_set(bv, on_off) == on_off
-        # Need special handling for:
+        # TODO: Need special handling for:
         #   blink-matching-paren
         #   enable-bracketed-paste
         #   prefer-visible-bell
@@ -2656,9 +2620,19 @@ module PrReadline # :nodoc:
     return instance_variable_get(bv) ? 'on' : 'off' if bv
 
     sv = STRING_VARIABLES[name]
-    return sv[1].call(name, value) if sv
+    return sv[1].call(name) if sv
 
     nil
+  end
+
+  def rl_variable_dumper(print_init_format)
+    bvfmt = print_init_format ? "set %s %s\n" : "%s is set to '%s'\n"
+
+    BOOLEAN_VARIABLES.each do |name, var|
+      @rl_outstream.printf(bvfmt, name, instance_variable_get(var))
+    end
+
+    # TODO: handle STRING_VARIABLES
   end
 
   def rl_named_function(name)
@@ -2724,6 +2698,7 @@ module PrReadline # :nodoc:
       next new_seq << char unless char == '\\'
 
       char = ss.getch
+      return nil if char.nil?
 
       new_seq << case char
                  when 'a'
@@ -2747,10 +2722,16 @@ module PrReadline # :nodoc:
                  when '\\'
                    '\\'
                  when 'x'
-                   ss.scan(/\h\h/).to_i(16).chr
+                   hc = ss.scan(/\h\h/)
+                   return nil if hc.nil?
+
+                   hc.to_i(16).chr
                  when '0'..'7'
                    ss.pos -= 1
-                   ss.scan(/\d\d\d/).to_i(8).chr
+                   oc = ss.scan(/\d\d\d/)
+                   return nil if oc.nil?
+
+                   oc.to_i(8).chr
                  else
                    char
                  end
@@ -2766,36 +2747,196 @@ module PrReadline # :nodoc:
     0
   end
 
+  def control_prefix(str)
+    %w[control c ctrl].include?(str.downcase) unless str.nil?
+  end
+
+  def meta_prefix(str)
+    %w[meta m].include?(str.downcase) unless str.nil?
+  end
+
+  NAME_TO_KEY = {
+    del:     0x7f,
+    esc:     0x1b,
+    escape:  0x1b,
+    lfd:     0x0a,
+    newline: 0x0a,
+    ret:     0x0d,
+    return:  0x0d,
+    rubout:  0x7f,
+    spc:     0x20,
+    space:   0x20,
+    tab:     0x09
+  }.freeze
+
+  def key_from_name(key)
+    NAME_TO_KEY[key.downcase]
+  end
+
+  # TODO: the following bunch of comments are incomplete
   # Read the binding command from STRING and perform it.
-  #   A key binding command looks like: Keyname: function-name\0,
+  #   A key binding command looks like: Keyname: function-name,
   #   a variable binding command looks like: set variable value.
   #   A new-style keybinding looks like "\C-x\C-x": exchange-point-and-mark.
   def rl_parse_and_bind(string)
     # If this is a parser directive, act on it.
-    return handle_parser_directive(string[1..]) if string[0, 1] == '$'
+    return handle_parser_directive(string[1..]) if string.start_with?('$')
 
     # If we aren't supposed to be parsing right now, then we're done.
     return true if @_rl_parsing_conditionalized_out
 
-    # TODO: this is incomplete
+    scanner = StringScanner.new(string)
 
-    if string.match?(/^set\s/i)
-      _, var, value = string.split(' ', 3)
-      return rl_variable_bind(var, value)
+    if scanner.scan(/set(\s+|\z)/)
+      var = scanner.scan(/[^\s]*(\s+|\z)/)
+
+      if var.nil? || var.strip.empty?
+        _rl_init_file_error('empty set command: %s', string)
+        return false
+      end
+
+      var.strip!
+      var.downcase!
+
+      if BOOLEAN_VARIABLES.key?(var)
+        value = scanner.rest
+      elsif STRING_VARIABLES.key?(var)
+        if scanner.peek(1) == '"'
+          if (qs = scanner.scan(/\A"(?:\\"|[^"])*?"/))
+            value = qs[1..-2]
+          else
+            _rl_init_file_error('missing closing \'"\' in value: %s', string)
+            return false
+          end
+        else
+          value = scanner.rest
+        end
+      else
+        _rl_init_file_error('unknown variable name: %s', var)
+        return false
+      end
+
+      return rl_variable_bind(var.strip, value.nil? ? nil : value.strip)
     end
 
-    if string =~ /"(.*)"\s*:\s*(.*)$/
-      key = Regexp.last_match(1)
-      funname = Regexp.last_match(2)
-      func = rl_named_function(funname)
-      rl_bind_key(key, func) if func
+    keyseq = keyname = nil
+
+    if string[0] == '"'
+      if (qs = scanner.scan(/\A"(?:\\"|[^"])*?"/))
+        keyseq = qs[1..-2]
+
+        if keyseq.empty?
+          _rl_init_file_error('empty key binding: %s', string)
+          return false
+        end
+      else
+        _rl_init_file_error('missing closing \'"\' in key binding: %s', string)
+        return false
+      end
+    else
+      keyname = scanner.scan_until(/(?=[:\s])/)
+
+      if keyname.nil?
+        _rl_init_file_error('missing colon in key binding: %s', string)
+        return false
+      end
+    end
+
+    c = scanner.getch
+
+    if c.nil?
+      _rl_init_file_error('missing seperator after keyname/keyseq: %s', string)
+      return false
+    end
+
+    if c == ':'
+      if scanner.peek(1) == '='
+        _rl_init_file_error('equivalencies not implemented: %s', string)
+        return false
+      end
+    elsif !c.match?(/\s/)
+      _rl_init_file_error('invalid separator: %s', string)
+      return false
+    end
+
+    # the rest of the line should be either a function name or a "macro"
+
+    scanner.scan(/\s*/)
+
+    macro = nil
+    c = scanner.peek(1)
+
+    case c
+    when '"'
+      unless (macro = scanner.scan(/\A"(?:\\"|[^"])*?"/))
+        _rl_init_file_error('missing closing \'"\' in macro: %s', string)
+        return false
+      end
+    when "'"
+      unless (macro = scanner.scan(/\A'(?:\\'|[^'])*?'/))
+        _rl_init_file_error('missing closing "\'" in macro: %s', string)
+        return false
+      end
+    end
+
+    if macro
+      unless scanner.eos?
+        _rl_init_file_error('extra characters after macro: %s', string)
+        return false
+      end
+
+      macro = macro[1..-2]
+
+      if macro.empty?
+        _rl_init_file_error('empty macro: %s', string)
+        return false
+      end
+    end
+
+    if keyname
+      cm1, cm2, key, extra = keyname.split('-', 4)
+
+      if extra
+        _rl_init_file_error('invalid key name: %s', string)
+        return false
+      end
+
+      if key.nil?
+        if cm2.nil?
+          key = cm1
+          cm1 = nil
+        else
+          key = cm2
+          cm2 = nil
+        end
+      elsif (control_prefix(cm1) && control_prefix(cm2)) ||
+            (meta_prefix(cm1) && meta_prefix(cm2))
+        _rl_init_file_error('duplicate modifiers: %s', string)
+        return false
+      end
+
+      if key.length == 1 && (0x21..0x7e).cover?(key.ord)
+        key = key.ord
+      else
+        unless (key = key_from_name(key))
+          _rl_init_file_error('invalid keyname: %s', string)
+          return false
+        end
+      end
+
+      key &= 0x1f if control_prefix?(cm1) || control_prefix?(cm2)
+      key |= 0x80 if meta_prefix?(cm1) || meta_prefix?(cm2)
+
+      # TODO: bind key
+    else # keyseq
+      # translate and bind key sequence
     end
 
     true
   end
 
   def _rl_enable_meta_key
-    @_rl_out_stream.write(@_rl_term_mm) if @term_has_meta && @_rl_term_mm
+    @_rl_out_stream.write(@_rl_term_smm) if @term_has_meta
   end
 
   def rl_set_keymap_from_edit_mode
@@ -2821,7 +2962,7 @@ module PrReadline # :nodoc:
     xkeymap = @_rl_keymap
     @_rl_keymap = map
 
-    if RUBY_PLATFORM.match?(/mswin|mingw/i)
+    if windows?
       rl_bind_keyseq_if_unbound("\340H", :rl_get_previous_history) # Up
       rl_bind_keyseq_if_unbound("\340P", :rl_get_next_history) # Down
       rl_bind_keyseq_if_unbound("\340M", :rl_forward_char)  # Right
@@ -2833,27 +2974,29 @@ module PrReadline # :nodoc:
       rl_bind_keyseq_if_unbound("\340S", :rl_delete) # Delete
       rl_bind_keyseq_if_unbound("\340R", :rl_overwrite_mode) # Insert
     else
-      rl_bind_keyseq_if_unbound("\033[A", :rl_get_previous_history)
-      rl_bind_keyseq_if_unbound("\033[B", :rl_get_next_history)
-      rl_bind_keyseq_if_unbound("\033[C", :rl_forward_char)
-      rl_bind_keyseq_if_unbound("\033[D", :rl_backward_char)
-      rl_bind_keyseq_if_unbound("\033[H", :rl_beg_of_line)
-      rl_bind_keyseq_if_unbound("\033[F", :rl_end_of_line)
+      # semi-standard sequences sent by some keys on real terminal or by some
+      # emulators
+      rl_bind_keyseq_if_unbound("\033[A", :rl_get_previous_history) # up arrow
+      rl_bind_keyseq_if_unbound("\033[B", :rl_get_next_history) # down arrow
+      rl_bind_keyseq_if_unbound("\033[C", :rl_forward_char) # right arrow
+      rl_bind_keyseq_if_unbound("\033[D", :rl_backward_char) # left arrow
+      rl_bind_keyseq_if_unbound("\033[H", :rl_beg_of_line) # beg/home
+      rl_bind_keyseq_if_unbound("\033[F", :rl_end_of_line) # end
 
-      rl_bind_keyseq_if_unbound("\033OA", :rl_get_previous_history)
-      rl_bind_keyseq_if_unbound("\033OB", :rl_get_next_history)
-      rl_bind_keyseq_if_unbound("\033OC", :rl_forward_char)
-      rl_bind_keyseq_if_unbound("\033OD", :rl_backward_char)
-      rl_bind_keyseq_if_unbound("\033OH", :rl_beg_of_line)
-      rl_bind_keyseq_if_unbound("\033OF", :rl_end_of_line)
+      rl_bind_keyseq_if_unbound("\033OA", :rl_get_previous_history) # up arrow
+      rl_bind_keyseq_if_unbound("\033OB", :rl_get_next_history) # down arrow
+      rl_bind_keyseq_if_unbound("\033OC", :rl_forward_char) # right arrow
+      rl_bind_keyseq_if_unbound("\033OD", :rl_backward_char) # left arrow
+      rl_bind_keyseq_if_unbound("\033OH", :rl_beg_of_line) # beg/home
+      rl_bind_keyseq_if_unbound("\033OF", :rl_end_of_line) # end
     end
 
     @_rl_keymap = xkeymap
   end
 
-  # Try and bind the common arrow key prefixes after giving termcap and
-  #   the inputrc file a chance to bind them and create `real' keymaps
-  #   for the arrow key prefix.
+  # Try and bind the common arrow key prefixes after giving terminfo and the
+  # inputrc file a chance to bind them and create `real' keymaps for the arrow
+  # key prefix.
   def bind_arrow_keys
     bind_arrow_keys_internal(@emacs_standard_keymap)
     bind_arrow_keys_internal(@vi_movement_keymap)
@@ -2864,21 +3007,18 @@ module PrReadline # :nodoc:
   def readline_initialize_everything
     # Set up input and output if they are not already set up.
     @rl_instream ||= $stdin
-
     @rl_outstream ||= $stdout
 
-    # Bind _rl_in_stream and _rl_out_stream immediately.  These values
-    #   may change, but they may also be used before readline_internal ()
-    #   is called.
+    # Bind _rl_in_stream and _rl_out_stream immediately.  These values may
+    # change, but they may also be used before readline_internal () is called.
     @_rl_in_stream = @rl_instream
     @_rl_out_stream = @rl_outstream
 
     # Allocate data structures.
-    @rl_line_buffer = ''
+    @rl_line_buffer ||= String.new(capacity: DEFAULT_BUFFER_SIZE)
 
     # Initialize the terminal interface.
-    @rl_terminal_name ||= ENV.fetch('TERM', nil)
-    _rl_init_terminal_io(@rl_terminal_name)
+    _rl_init_terminal_io(nil)
 
     # Bind tty characters to readline functions.
     readline_default_bindings
@@ -2889,7 +3029,7 @@ module PrReadline # :nodoc:
     # Read in the init file.
     rl_read_init_file(nil)
 
-    # TODP: is this correct?
+    # TODO: is this correct?
     if @_rl_horizontal_scroll_mode && @_rl_term_autowrap
       @_rl_screenwidth -= 1
       @_rl_screenchars -= @_rl_screenheight
@@ -2913,10 +3053,12 @@ module PrReadline # :nodoc:
     # rubocop:enable Naming/MemoizedInstanceVariableName
   end
 
+  # rubocop:disable Naming/MemoizedInstanceVariableName
   def _rl_init_line_state
     @rl_point = @rl_end = @rl_mark = 0
-    @rl_line_buffer = ''
+    @rl_line_buffer ||= String.new(capacity: DEFAULT_BUFFER_SIZE)
   end
+  # rubocop:enable Naming/MemoizedInstanceVariableName
 
   # Set the history pointer back to the last entry in the history.
   def _rl_start_using_history
@@ -2940,11 +3082,11 @@ module PrReadline # :nodoc:
     end
   end
 
-  # Initialize the VISIBLE_LINE and INVISIBLE_LINE arrays, and their associated
-  #   arrays of line break markers.  MINSIZE is the minimum size of VISIBLE_LINE
-  #   and INVISIBLE_LINE; if it is greater than LINE_SIZE, LINE_SIZE is
-  #   increased.  If the lines have already been allocated, this ensures that
-  #   they can hold at least MINSIZE characters.
+  # Initialize the VISIBLE_LINE and INVISIBLE_LINE arrays, and their
+  # associated arrays of line break markers.  MINSIZE is the minimum size of
+  # VISIBLE_LINE and INVISIBLE_LINE; if it is greater than LINE_SIZE,
+  # LINE_SIZE is increased.  If the lines have already been allocated, this
+  # ensures that they can hold at least MINSIZE characters.
   def init_line_structures(minsize)
     if @invisible_line.nil? # initialize it
       @line_size = minsize if @line_size < minsize
@@ -3268,16 +3410,16 @@ module PrReadline # :nodoc:
     end
 
     # If this is the first line and there are invisible characters in the
-    #   prompt string, and the prompt string has not changed, and the current
-    #   cursor position is before the last invisible character in the prompt,
-    #   and the index of the character to move to is past the end of the
-    #   prompt string, then redraw the entire prompt string.  We can only do
-    #   this reliably if the terminal supports a `cr' capability.
-
-    #  This is not an efficiency hack -- there is a problem with redrawing
-    #  portions of the prompt string if they contain terminal escape sequences
-    #  (like drawing the `unbold' sequence without a corresponding `bold')
-    #  that manifests itself on certain terminals.
+    # prompt string, and the prompt string has not changed, and the current
+    # cursor position is before the last invisible character in the prompt,
+    # and the index of the character to move to is past the end of the prompt
+    # string, then redraw the entire prompt string.  We can only do this
+    # reliably if the terminal supports a `cr' capability.
+    #
+    # This is not an efficiency hack -- there is a problem with redrawing
+    # portions of the prompt string if they contain terminal escape sequences
+    # (like drawing the `unbold' sequence without a corresponding `bold') that
+    # manifests itself on certain terminals.
 
     lendiff = @local_prompt_len
 
@@ -4197,7 +4339,7 @@ module PrReadline # :nodoc:
   # Initialize readline (and terminal if not already).
   def rl_initialize
     # If we have never been called before, initialize the terminal and data
-    #   structures.
+    # structures.
     unless @rl_initialized
       rl_setstate(RL_STATE_INITIALIZING)
       readline_initialize_everything
@@ -4223,7 +4365,7 @@ module PrReadline # :nodoc:
     @rl_last_func = nil
 
     # Parsing of key-bindings begins in an enabled state.
-    @_rl_parsing_conditionalized_out = 0
+    @_rl_parsing_conditionalized_out = false
 
     _rl_vi_initialize_line if @rl_editing_mode == @vi_mode
 
@@ -4311,14 +4453,14 @@ module PrReadline # :nodoc:
                         _rl_col_width(prompt_last_line, 0, l)
                       end
 
-    # Dissect prompt_last_line into screen lines. Note that here we have
-    #   to use the real screenwidth. Readline's notion of screenwidth might be
-    #   one less, see terminal.c.
+    # Dissect prompt_last_line into screen lines. Note that here we have to
+    # use the real screenwidth. Readline's notion of screenwidth might be one
+    # less, see terminal.c.
     real_screenwidth = @_rl_screenwidth + (@_rl_term_autowrap ? 0 : 1)
     @_rl_last_v_pos = l / real_screenwidth
     # If the prompt length is a multiple of real_screenwidth, we don't know
-    #   whether the cursor is at the end of the last line, or already at the
-    #   beginning of the next line. Output a newline just to be safe.
+    # whether the cursor is at the end of the last line, or already at the
+    # beginning of the next line. Output a newline just to be safe.
     if l.positive? && (l % real_screenwidth).zero?
       _rl_output_some_chars("\n", 0, 1)
     end
@@ -4347,7 +4489,7 @@ module PrReadline # :nodoc:
     @_rl_in_stream = @rl_instream
     @_rl_out_stream = @rl_outstream
 
-    send(@rl_startup_hook) if @rl_startup_hook
+    @rl_startup_hook&.call
 
     # If we're not echoing, we still want to at least print a prompt, because
     #   rl_redisplay will not do it for us.  If the calling application has a
@@ -4906,8 +5048,8 @@ module PrReadline # :nodoc:
     k
   end
 
-  # clear to the end of the line.  count is the minimum
-  #   number of character spaces to clear,
+  # clear to the end of the line.  count is the minimum number of character
+  # spaces to clear,
   def _rl_clear_to_eol(count)
     if @_rl_term_clreol
       @rl_outstream.write(@_rl_term_clreol)
@@ -4916,8 +5058,8 @@ module PrReadline # :nodoc:
     end
   end
 
-  # clear to the end of the line using spaces.  count is the minimum
-  #   number of character spaces to clear,
+  # clear to the end of the line using spaces.  count is the minimum number of
+  # character spaces to clear,
   def space_to_eol(count)
     if @hconsolehandle
       csbi = fiddle.pointer.malloc(24)
@@ -5105,15 +5247,15 @@ module PrReadline # :nodoc:
   end
 
   # Read a line of input from the global rl_instream, doing output on the
-  #   global rl_outstream.  If rl_prompt is non-null, then that is our prompt.
+  # global rl_outstream.  If rl_prompt is non-null, then that is our prompt.
   def readline_internal
     readline_internal_setup
     eof = readline_internal_charloop
     readline_internal_teardown(eof)
   end
 
-  # Read a line of input.  Prompt with PROMPT.  An empty PROMPT means
-  #   none.  A return value of NULL means that EOF was encountered.
+  # Read a line of input.  Prompt with PROMPT.  An empty PROMPT means none.
+  # A return value of NULL means that EOF was encountered.
   def readline(prompt)
     # If we are at EOF return a NULL string.
     if @rl_pending_input == EOF
@@ -5617,7 +5759,7 @@ module PrReadline # :nodoc:
     if @rl_explicit_arg
       rl_refresh_line(count, key)
     else
-      _rl_clear_screen # calls termcap function to clear screen
+      _rl_clear_screen
       rl_forced_update_display
       @rl_display_fixed = true
     end
@@ -6682,7 +6824,7 @@ module PrReadline # :nodoc:
 
   def make_quoted_replacement(match, mtype, quote_char)
     # If we are doing completion on quoted substrings, and any matches contain
-    # any of the completer_word_break_characters, then auto- matically prepend
+    # any of the completer_word_break_characters, then automatically prepend
     # the substring with a quote character (just pick the first one from the
     # list of such) if it does not already begin with a quote string.  FIXME:
     # Need to remove any such automatically inserted quote character when it
@@ -7262,9 +7404,7 @@ module PrReadline # :nodoc:
     @_rl_tty_chars.t_werase = h['werase']
     @_rl_tty_chars.t_lnext = h['lnext']
     @_rl_tty_chars.t_status = -1
-    retry_if_interrupted do
-      @otio = `stty -g`
-    end
+    retry_if_interrupted { @otio = `stty -g` }
   end
 
   def _rl_bind_tty_special_chars(kmap)
@@ -7350,8 +7490,8 @@ module PrReadline # :nodoc:
 
     rl_setstate(RL_STATE_TTYCSAVED)
     if @_rl_bind_stty_chars
-      # If editing in vi mode, make sure we set the bindings in the
-      # insertion keymap no matter what keymap we ended up in.
+      # If editing in vi mode, make sure we set the bindings in the insertion
+      # keymap no matter what keymap we ended up in.
       if @rl_editing_mode == @vi_mode
         _rl_bind_tty_special_chars(@vi_insertion_keymap)
       else
@@ -9177,7 +9317,7 @@ module PrReadline # :nodoc:
   def rl_resize_terminal
     return unless @readline_echoing_p
 
-    _rl_get_screen_size(@rl_instream.fileno, 1)
+    _rl_get_screen_size(@rl_instream, true)
 
     if @rl_redisplay_function == :rl_redisplay
       _rl_redisplay_after_sigwinch
@@ -9190,6 +9330,25 @@ module PrReadline # :nodoc:
     rl_setstate(RL_STATE_SIGHANDLER)
     rl_resize_terminal
     rl_unsetstate(RL_STATE_SIGHANDLER)
+  end
+
+  def rl_set_screen_size(rows, cols)
+    _rl_init_terminal_io(@rl_terminal_name)
+
+    @_rl_screenheight = rows if rows.positive?
+
+    if cols.positive?
+      @_rl_screenwidth = cols
+      @_rl_screenwidth -= 1 if @_rl_term_autowrap
+    end
+
+    return if rows <= 0 && cols <= 0
+
+    @_rl_screenchars = @_rl_screenwidth * @_rl_screenheight
+  end
+
+  def rl_get_screen_size
+    [@_rl_screenheight, @_rl_screenwidth]
   end
 
   module_function \
@@ -9215,6 +9374,7 @@ module PrReadline # :nodoc:
     :rl_event_hook=,
     :rl_filename_quote_characters,
     :rl_filename_quote_characters=,
+    :rl_get_screen_size,
     :rl_instream,
     :rl_instream=,
     :rl_library_version,
@@ -9222,14 +9382,17 @@ module PrReadline # :nodoc:
     :rl_outstream,
     :rl_outstream=,
     :rl_point,
+    :rl_prefer_env_winsize=,
     :rl_readline_name,
     :rl_readline_name=,
+    :rl_set_screen_size,
     :rl_variable_bind,
+    :rl_variable_dumper,
     :rl_variable_value
 
   def no_terminal?
-    term = ENV.fetch('TERM', nil)
-    term.nil? || term == 'dumb' || RUBY_PLATFORM.match?(/mswin|mingw/i)
+    term = ENV.fetch('TERM', 'dumb')
+    term == 'dumb' || RUBY_PLATFORM.match?(/mswin|mingw/i)
   end
 
   private :no_terminal?

@@ -6,7 +6,7 @@
 # rubocop:disable Metrics/MethodLength
 # rubocop:disable Style/BlockDelimiters
 
-require 'minitest/autorun'
+require_relative 'test_helper'
 require 'pr-readline/readline'
 
 class TestHistory < Minitest::Test # :nodoc:
